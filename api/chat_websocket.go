@@ -765,6 +765,30 @@ func getWsConnectionSnapshot() wsConnectionSnapshot {
 	return snapshot
 }
 
+// countOnlineUsersByWorld 统计各世界当前有 WebSocket 连接停留的唯一用户数（不含访客与观察者）。
+func countOnlineUsersByWorld() map[string]int {
+	result := map[string]int{}
+	connMap := getUserConnInfoMap()
+	if connMap == nil {
+		return result
+	}
+	connMap.Range(func(_ string, userConnMap *utils.SyncMap[*WsSyncConn, *ConnInfo]) bool {
+		worlds := map[string]struct{}{}
+		userConnMap.Range(func(_ *WsSyncConn, info *ConnInfo) bool {
+			if info == nil || info.IsGuest || info.IsObserver || info.WorldId == "" {
+				return true
+			}
+			worlds[info.WorldId] = struct{}{}
+			return true
+		})
+		for worldID := range worlds {
+			result[worldID]++
+		}
+		return true
+	})
+	return result
+}
+
 func shouldBroadcastChannelPresence(channelID string, nowMs int64) bool {
 	if channelID == "" {
 		return false

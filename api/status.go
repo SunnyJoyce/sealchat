@@ -10,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"sealchat/model"
+	"sealchat/service"
 	"sealchat/service/metrics"
 )
 
@@ -271,4 +272,26 @@ func parseStatusRange(v string) (time.Duration, bool) {
 		return 7 * 24 * time.Hour, true
 	}
 	return 0, false
+}
+
+type adminWorldStatusItem struct {
+	service.AdminWorldSummary
+	OnlineCount int `json:"onlineCount"`
+}
+
+// AdminWorldStatusList 返回全部正常状态世界（含私有世界）的概要信息，仅平台管理员可用。
+func AdminWorldStatusList(c *fiber.Ctx) error {
+	summaries, err := service.AdminListWorldSummaries()
+	if err != nil {
+		return fiber.NewError(http.StatusInternalServerError, err.Error())
+	}
+	online := countOnlineUsersByWorld()
+	items := make([]adminWorldStatusItem, 0, len(summaries))
+	for _, summary := range summaries {
+		items = append(items, adminWorldStatusItem{
+			AdminWorldSummary: summary,
+			OnlineCount:       online[summary.ID],
+		})
+	}
+	return c.Status(http.StatusOK).JSON(fiber.Map{"items": items})
 }

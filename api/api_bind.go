@@ -728,8 +728,8 @@ func Init(config *utils.AppConfig, uiStatic fs.FS) error {
 	v1Auth.Static("/attachments", uploadRoot)
 	v1Auth.Get("/gallery/thumbs/:filename", GalleryThumbServe)
 
-	v1Auth.Get("/status", StatusLatest)
-	v1Auth.Get("/status/history", StatusHistory)
+	v1Auth.Get("/status", UserRoleAdminMiddleware, StatusLatest)
+	v1Auth.Get("/status/history", UserRoleAdminMiddleware, StatusHistory)
 
 	audio := v1Auth.Group("/audio")
 	audio.Get("/library/settings", AudioLibrarySettingsGet)
@@ -980,6 +980,7 @@ func Init(config *utils.AppConfig, uiStatic fs.FS) error {
 	v1AuthAdmin.Get("/admin/message-visible-char-count/status", AdminMessageVisibleCharCountStatus)
 	v1AuthAdmin.Post("/admin/message-visible-char-count/rebuild", AdminMessageVisibleCharCountRebuild)
 	v1AuthAdmin.Get("/admin/perf/status", AdminPerfStatus)
+	v1AuthAdmin.Get("/admin/worlds/status", AdminWorldStatusList)
 	v1AuthAdmin.Get("/admin/perf/history", AdminPerfHistory)
 	v1AuthAdmin.Get("/admin/perf/artifacts", AdminPerfArtifacts)
 	v1AuthAdmin.Get("/admin/perf/top-functions", AdminPerfTopFunctions)

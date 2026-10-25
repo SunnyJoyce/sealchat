@@ -6,6 +6,7 @@ import { useMessage } from 'naive-ui';
 import { api } from '@/stores/_config';
 import { useUserStore } from '@/stores/user';
 import StatusMetricPanel from './components/StatusMetricPanel.vue';
+import StatusWorldTable from './components/StatusWorldTable.vue';
 import {
   buildStatusHistoryParams,
   createMetricHistoryStore,
@@ -60,12 +61,20 @@ type StatusCard = {
   breakdowns?: { label: string; value: string }[];
 };
 
+type StatusCardGroup = {
+  title: string;
+  cols: string;
+  cards: StatusCard[];
+};
+
 const user = useUserStore();
 const message = useMessage();
 
 const summary = ref<StatusSummary | null>(null);
 const historyPoints = ref<StatusHistoryPoint[]>([]);
 const loading = ref(false);
+const forbidden = ref(false);
+const worldTable = ref<InstanceType<typeof StatusWorldTable> | null>(null);
 const historyLoading = ref(false);
 const refreshTimer = ref<number | null>(null);
 const historyFilterMode = ref<StatusFilterMode>('1h');
@@ -108,25 +117,36 @@ const historyStore = createMetricHistoryStore(async (query) => {
   return { range: query.mode, points: payload.points || [] };
 });
 
-const summaryCards = computed<StatusCard[]>(() => {
+const summaryGroups = computed<StatusCardGroup[]>(() => {
   if (!summary.value) {
     return [];
   }
   const data = summary.value;
-  return [
+  const realtimeCards: StatusCard[] = [
+    {
+      label: 'WebSocket 连接',
+      value: formatStatusNumber(data.wsTotalConnections),
+      hint: '实时值：已鉴权 + 鉴权前连接',
+      variant: 'metric',
+      breakdowns: [
+        { label: '已鉴权', value: formatStatusNumber(data.wsAuthedConnections) },
+        { label: '鉴权前', value: formatStatusNumber(data.wsPreAuthConnections) },
+        { label: '访客', value: formatStatusNumber(data.wsGuestConnections) },
+        { label: '观察者', value: formatStatusNumber(data.wsObserverConnections) },
+        { label: '用户', value: formatStatusNumber(data.wsAuthenticatedUsers) },
+      ],
+    },
     { label: '并发连接', value: formatStatusNumber(data.concurrentConnections), hint: '采样值：已鉴权 WebSocket 连接数' },
-    { label: 'WS 总连接', value: formatStatusNumber(data.wsTotalConnections), hint: '实时值：已鉴权 + 鉴权前连接' },
-    { label: 'WS 已鉴权', value: formatStatusNumber(data.wsAuthedConnections), hint: '实时值：已完成 IDENTIFY 的连接' },
-    { label: 'WS 鉴权前', value: formatStatusNumber(data.wsPreAuthConnections), hint: '实时值：已升级但未 IDENTIFY 的连接' },
-    { label: 'Guest 连接', value: formatStatusNumber(data.wsGuestConnections), hint: '实时值：空 token 访客连接数' },
-    { label: '观察者连接', value: formatStatusNumber(data.wsObserverConnections), hint: '实时值：observer 模式连接数' },
-    { label: 'WS 鉴权用户', value: formatStatusNumber(data.wsAuthenticatedUsers), hint: '实时值：存在鉴权连接的唯一用户数' },
     { label: '在线用户', value: formatStatusNumber(data.onlineUsers), hint: '120 秒内仍活跃的用户' },
     { label: '消息 / 分钟', value: formatStatusNumber(data.messagesPerMinute), hint: '最近一分钟的消息吞吐' },
+  ];
+  const scaleCards: StatusCard[] = [
     { label: '注册用户', value: formatStatusNumber(data.registeredUsers), hint: '未被禁用的账户数量' },
     { label: '世界总数', value: formatStatusNumber(data.worldCount), hint: '状态正常的世界' },
     { label: '公共频道', value: formatStatusNumber(data.channelCount), hint: '状态正常的公共频道' },
     { label: '私聊频道', value: formatStatusNumber(data.privateChannelCount), hint: '状态正常的私聊频道' },
+  ];
+  const contentCards: StatusCard[] = [
     {
       label: '消息总数',
       value: formatStatusNumber(data.messageCount),
@@ -170,6 +190,11 @@ const summaryCards = computed<StatusCard[]>(() => {
       ],
     },
   ];
+  return [
+    { title: '实时状态', cols: '1 560:2 1160:4', cards: realtimeCards },
+    { title: '平台规模', cols: '1 560:2 1160:4', cards: scaleCards },
+    { title: '内容与存储', cols: '1 768:2 1400:4', cards: contentCards },
+  ];
 });
 
 const metricPanels = computed(() => statusMetricList.map((metric) => ({
@@ -212,6 +237,11 @@ const expandedOverlayStyle: CSSProperties = {
   overflowY: 'auto',
 };
 
+const isForbiddenError = (err: unknown) => {
+  const status = (err as { response?: { status?: number } })?.response?.status;
+  return status === 401 || status === 403;
+};
+
 const fetchSummary = async () => {
   loading.value = true;
   try {
@@ -220,6 +250,10 @@ const fetchSummary = async () => {
     });
     summary.value = resp.data as StatusSummary;
   } catch (err) {
+    if (isForbiddenError(err)) {
+      forbidden.value = true;
+      return;
+    }
     console.error(err);
     message.error('获取状态失败');
   } finally {
@@ -245,7 +279,7 @@ const loadHistory = async (forceRefresh = false) => {
     }
     historyPoints.value = payload.points || [];
   } catch (err) {
-    if (requestId === historyRequestSeq) {
+    if (requestId === historyRequestSeq && !isForbiddenError(err)) {
       console.error(err);
       message.error('获取历史数据失败');
     }
@@ -258,7 +292,7 @@ const loadHistory = async (forceRefresh = false) => {
 
 const refreshAll = async () => {
   historyStore.clearAll();
-  await Promise.allSettled([fetchSummary(), loadHistory(true)]);
+  await Promise.allSettled([fetchSummary(), loadHistory(true), worldTable.value?.refresh()]);
 };
 
 const closeExpandedPanel = () => {
@@ -318,51 +352,62 @@ onBeforeUnmount(() => {
       </template>
     </n-page-header>
 
-    <n-spin :show="loading">
-      <n-grid cols="1 768:2 1160:3" :x-gap="18" :y-gap="18">
-        <n-grid-item v-for="card in summaryCards" :key="card.label">
-          <n-card
-            class="status-card"
-            :class="{
-              'status-card--metric': card.variant === 'metric',
-              'status-card--metric-compact': card.compactValue,
-            }"
-            size="small"
-          >
-            <div v-if="card.variant === 'metric'" class="status-card__metric">
-              <div class="status-card__label">{{ card.label }}</div>
-              <div
-                class="status-card__value status-card__value--metric"
-                :class="{ 'status-card__value--compact': card.compactValue }"
-              >
-                {{ card.value }}
-              </div>
-              <div class="status-card__metric-footer">
-                <div class="status-card__hint status-card__hint--metric">{{ card.hint }}</div>
-                <div v-if="card.breakdowns?.length" class="status-card__mini-stats" aria-label="场内场外拆分">
-                  <div
-                    v-for="item in card.breakdowns"
-                    :key="`${card.label}-${item.label}`"
-                    class="status-card__mini-stat"
-                  >
-                    <span class="status-card__mini-stat-label">{{ item.label }}</span>
-                    <span class="status-card__mini-stat-value">{{ item.value }}</span>
+    <n-result
+      v-if="forbidden"
+      status="403"
+      title="仅平台管理员可查看"
+      description="平台状态监测仅对平台管理员开放。"
+    />
+    <n-spin v-if="!forbidden" :show="loading">
+      <section v-for="group in summaryGroups" :key="group.title" class="status-group">
+        <h2 class="status-group__title">{{ group.title }}</h2>
+        <n-grid :cols="group.cols" :x-gap="18" :y-gap="18">
+          <n-grid-item v-for="card in group.cards" :key="card.label">
+            <n-card
+              class="status-card"
+              :class="{
+                'status-card--metric': card.variant === 'metric',
+                'status-card--metric-compact': card.compactValue,
+              }"
+              size="small"
+            >
+              <div v-if="card.variant === 'metric'" class="status-card__metric">
+                <div class="status-card__label">{{ card.label }}</div>
+                <div
+                  class="status-card__value status-card__value--metric"
+                  :class="{ 'status-card__value--compact': card.compactValue }"
+                >
+                  {{ card.value }}
+                </div>
+                <div class="status-card__metric-footer">
+                  <div class="status-card__hint status-card__hint--metric">{{ card.hint }}</div>
+                  <div v-if="card.breakdowns?.length" class="status-card__mini-stats" :aria-label="`${card.label}拆分`">
+                    <div
+                      v-for="item in card.breakdowns"
+                      :key="`${card.label}-${item.label}`"
+                      class="status-card__mini-stat"
+                    >
+                      <span class="status-card__mini-stat-label">{{ item.label }}</span>
+                      <span class="status-card__mini-stat-value">{{ item.value }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-            <div v-else class="status-card__main">
-              <div class="status-card__label">{{ card.label }}</div>
-              <div class="status-card__value">{{ card.value }}</div>
-              <div class="status-card__hint">{{ card.hint }}</div>
-            </div>
-          </n-card>
-        </n-grid-item>
-      </n-grid>
-      <div v-if="!summaryCards.length" class="status-empty" role="status">暂无数据，正在等待第一次采样 ...</div>
+              <div v-else class="status-card__main">
+                <div class="status-card__label">{{ card.label }}</div>
+                <div class="status-card__value">{{ card.value }}</div>
+                <div class="status-card__hint">{{ card.hint }}</div>
+              </div>
+            </n-card>
+          </n-grid-item>
+        </n-grid>
+      </section>
+      <div v-if="!summaryGroups.length" class="status-empty" role="status">暂无数据，正在等待第一次采样 ...</div>
     </n-spin>
 
-    <section class="status-history-section">
+    <StatusWorldTable v-if="!forbidden" ref="worldTable" />
+
+    <section v-if="!forbidden" class="status-history-section">
       <div class="status-history-section__header">
         <div class="status-history-section__copy">
           <h2>历史指标曲线</h2>
@@ -462,7 +507,21 @@ onBeforeUnmount(() => {
   text-decoration: underline;
 }
 
+.status-group + .status-group {
+  margin-top: 1.25rem;
+}
+
+.status-group__title {
+  margin: 0 0 0.6rem;
+  font-size: 1.02rem;
+}
+
 .status-card {
+  /* 覆盖全局 .n-card 的 360px 宽度限制，让卡片铺满栅格 */
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  height: 100%;
   border-radius: 1rem;
   border: 1px solid var(--sc-border-mute);
   background: linear-gradient(

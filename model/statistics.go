@@ -30,21 +30,21 @@ func CountActiveUsers() (int64, error) {
 // CountWorlds 返回处于激活状态的世界数量。
 func CountWorlds() (int64, error) {
 	var count int64
-	err := db.Model(&WorldModel{}).Where("status <> ?", "deleted").Count(&count).Error
+	err := db.Model(&WorldModel{}).Where("status NOT IN ?", []string{"deleted", "archived"}).Count(&count).Error
 	return count, err
 }
 
 // CountChannels 返回正常状态的公共频道数量（不含私聊）。
 func CountChannels() (int64, error) {
 	var count int64
-	err := db.Model(&ChannelModel{}).Where("status <> ? AND is_private = ?", "deleted", false).Count(&count).Error
+	err := db.Model(&ChannelModel{}).Where("status NOT IN ? AND is_private = ?", []string{ChannelStatusDeleted, ChannelStatusArchived}, false).Count(&count).Error
 	return count, err
 }
 
 // CountPrivateChannels 返回正常状态的私聊频道数量。
 func CountPrivateChannels() (int64, error) {
 	var count int64
-	err := db.Model(&ChannelModel{}).Where("status <> ? AND is_private = ?", "deleted", true).Count(&count).Error
+	err := db.Model(&ChannelModel{}).Where("status NOT IN ? AND is_private = ?", []string{ChannelStatusDeleted, ChannelStatusArchived}, true).Count(&count).Error
 	return count, err
 }
 
@@ -93,6 +93,35 @@ func CountMessageStatusStats() (*MessageStatusStats, error) {
 		ICChars:       result.ICChars,
 		OOCChars:      result.OOCChars,
 	}, nil
+}
+
+// WorldMessageCharStats 是单个世界内未删除消息的字数统计。
+type WorldMessageCharStats struct {
+	WorldID  string `gorm:"column:world_id"`
+	Chars    int64  `gorm:"column:total_chars"`
+	CharsIC  int64  `gorm:"column:ic_chars"`
+	CharsOOC int64  `gorm:"column:ooc_chars"`
+}
+
+// CountWorldMessageChars 按世界汇总未删除消息的可见字数（含场内/场外拆分），只统计正常状态的世界。
+func CountWorldMessageChars() ([]WorldMessageCharStats, error) {
+	lenExpr := visibleCharCountExpr("m.visible_char_count")
+	modeExpr := "LOWER(COALESCE(NULLIF(m.ic_mode, ''), 'ic'))"
+
+	var rows []WorldMessageCharStats
+	err := db.Table("messages AS m").
+		Select(
+			"c.world_id AS world_id, "+
+				"COALESCE(SUM("+lenExpr+"), 0) AS total_chars, "+
+				"COALESCE(SUM(CASE WHEN "+modeExpr+" = 'ooc' THEN 0 ELSE "+lenExpr+" END), 0) AS ic_chars, "+
+				"COALESCE(SUM(CASE WHEN "+modeExpr+" = 'ooc' THEN "+lenExpr+" ELSE 0 END), 0) AS ooc_chars",
+		).
+		Joins("JOIN channels c ON c.id = m.channel_id").
+		Joins("JOIN worlds w ON w.id = c.world_id").
+		Where("m.is_deleted = ? AND c.status <> ? AND w.status NOT IN ?", false, ChannelStatusDeleted, []string{"deleted", "archived"}).
+		Group("c.world_id").
+		Scan(&rows).Error
+	return rows, err
 }
 
 // CountAttachments 返回正式附件数量（不含临时附件）。
