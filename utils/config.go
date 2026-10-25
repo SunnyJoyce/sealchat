@@ -762,6 +762,8 @@ func ReadConfig() *AppConfig {
 		ThemeManagement: ThemeManagementConfig{
 			PlatformThemes:               []PlatformThemeConfig{},
 			DefaultPlatformThemeID:       "",
+			DefaultPlatformDayThemeID:    "",
+			DefaultPlatformNightThemeID:  "",
 			PlatformDice3DStyles:         []PlatformDice3DStyleConfig{},
 			DefaultPlatformDice3DStyleID: "",
 		},
@@ -2198,6 +2200,8 @@ func WriteConfigChecked(config *AppConfig) error {
 		config.ThemeManagement = NormalizeThemeManagementConfig(config.ThemeManagement)
 		_ = candidateK.Set("themeManagement.platformThemes", config.ThemeManagement.PlatformThemes)
 		_ = candidateK.Set("themeManagement.defaultPlatformThemeId", config.ThemeManagement.DefaultPlatformThemeID)
+		_ = candidateK.Set("themeManagement.defaultPlatformDayThemeId", config.ThemeManagement.DefaultPlatformDayThemeID)
+		_ = candidateK.Set("themeManagement.defaultPlatformNightThemeId", config.ThemeManagement.DefaultPlatformNightThemeID)
 		_ = candidateK.Set("themeManagement.platformDice3DStyles", config.ThemeManagement.PlatformDice3DStyles)
 		_ = candidateK.Set("themeManagement.defaultPlatformDice3DStyleId", config.ThemeManagement.DefaultPlatformDice3DStyleID)
 		config.CursorTheme = NormalizeCursorThemeConfig(config.CursorTheme, false)

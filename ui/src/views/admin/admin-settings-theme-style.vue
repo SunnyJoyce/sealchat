@@ -34,9 +34,18 @@ const message = useMessage()
 const display = useDisplayStore()
 const utils = useUtilsStore()
 
+type PlatformThemeDefaultKey = 'defaultPlatformThemeId' | 'defaultPlatformDayThemeId' | 'defaultPlatformNightThemeId'
+const platformThemeDefaultSlots: Array<{ key: PlatformThemeDefaultKey; label: string; tag: string; placeholder: string }> = [
+  { key: 'defaultPlatformThemeId', label: '通用默认主题', tag: '默认', placeholder: '未设置（使用基础配色）' },
+  { key: 'defaultPlatformDayThemeId', label: '日间默认主题', tag: '日间默认', placeholder: '未设置（使用通用默认主题）' },
+  { key: 'defaultPlatformNightThemeId', label: '夜间默认主题', tag: '夜间默认', placeholder: '未设置（使用通用默认主题）' },
+]
+
 const model = ref<ThemeManagementConfig>({
   platformThemes: [],
   defaultPlatformThemeId: '',
+  defaultPlatformDayThemeId: '',
+  defaultPlatformNightThemeId: '',
   platformDice3DStyles: [],
   defaultPlatformDice3DStyleId: '',
 })
@@ -64,10 +73,19 @@ const personalThemeOptions = computed(() =>
     value: theme.id,
   })),
 )
-const defaultPlatformThemeName = computed(() => {
-  if (!model.value.defaultPlatformThemeId) return ''
-  return platformThemes.value.find((item) => item.id === model.value.defaultPlatformThemeId)?.name || ''
-})
+const platformThemeSelectOptions = computed(() =>
+  platformThemes.value.map((theme) => ({
+    label: theme.name,
+    value: theme.id,
+  })),
+)
+const getPlatformThemeDefaultTags = (themeId: string) =>
+  platformThemeDefaultSlots.filter((slot) => model.value[slot.key] === themeId).map((slot) => slot.tag)
+const getPlatformThemeDefaultMenuOptions = (themeId: string) =>
+  platformThemeDefaultSlots.map((slot) => ({
+    label: model.value[slot.key] === themeId ? `取消${slot.label}` : `设为${slot.label}`,
+    key: slot.key,
+  }))
 const isModified = computed(() =>
   JSON.stringify({
     themeManagement: model.value,
@@ -94,6 +112,8 @@ const normalizeDicePresetConfig = (item: any) => {
 const normalizeThemeManagement = (value?: ThemeManagementConfig | null): ThemeManagementConfig => ({
   platformThemes: Array.isArray(value?.platformThemes) ? cloneDeep(value?.platformThemes || []) : [],
   defaultPlatformThemeId: value?.defaultPlatformThemeId || '',
+  defaultPlatformDayThemeId: value?.defaultPlatformDayThemeId || '',
+  defaultPlatformNightThemeId: value?.defaultPlatformNightThemeId || '',
   platformDice3DStyles: Array.isArray(value?.platformDice3DStyles)
     ? cloneDeep(value?.platformDice3DStyles || []).map((item: any) => {
       const { skin: _legacySkin, ...rest } = item
@@ -394,8 +414,8 @@ const appendPlatformTheme = (payload: ThemeImportPayload) => {
     updatedAt: now,
   }
   model.value = {
+    ...model.value,
     platformThemes: [...platformThemes.value, nextTheme],
-    defaultPlatformThemeId: model.value.defaultPlatformThemeId || '',
   }
   return true
 }
@@ -515,16 +535,27 @@ const handleImportPersonalTheme = () => {
 
 const handleDeleteTheme = (themeId: string) => {
   const nextThemes = platformThemes.value.filter((item) => item.id !== themeId)
-  model.value = {
+  const next: ThemeManagementConfig = {
+    ...model.value,
     platformThemes: nextThemes,
-    defaultPlatformThemeId: model.value.defaultPlatformThemeId === themeId ? '' : model.value.defaultPlatformThemeId || '',
+  }
+  platformThemeDefaultSlots.forEach((slot) => {
+    if (next[slot.key] === themeId) next[slot.key] = ''
+  })
+  model.value = next
+}
+
+const handleToggleDefault = (themeId: string, key: PlatformThemeDefaultKey) => {
+  model.value = {
+    ...model.value,
+    [key]: model.value[key] === themeId ? '' : themeId,
   }
 }
 
-const handleToggleDefault = (themeId: string) => {
+const handleDefaultThemeSelect = (key: PlatformThemeDefaultKey, themeId: string | null) => {
   model.value = {
     ...model.value,
-    defaultPlatformThemeId: model.value.defaultPlatformThemeId === themeId ? '' : themeId,
+    [key]: themeId || '',
   }
 }
 
@@ -605,8 +636,20 @@ defineExpose<AdminThemeStyleExpose>({
     <n-form label-placement="left" label-width="120">
       <n-collapse v-model:expanded-names="expandedNames" class="settings-collapse">
         <n-collapse-item title="平台主题列表" name="platform-theme-list">
-          <n-form-item label="默认主题">
-            <span class="text-sm text-gray-600 dark:text-gray-400">{{ defaultPlatformThemeName || '未设置' }}</span>
+          <n-form-item v-for="defaultSlot in platformThemeDefaultSlots" :key="defaultSlot.key" :label="defaultSlot.label">
+            <n-select
+              :value="model[defaultSlot.key] || null"
+              :options="platformThemeSelectOptions"
+              :placeholder="defaultSlot.placeholder"
+              clearable
+              class="admin-theme-style__toolbar-select"
+              @update:value="(value: string | null) => handleDefaultThemeSelect(defaultSlot.key, value)"
+            />
+          </n-form-item>
+          <n-form-item label=" ">
+            <span class="text-sm text-gray-600 dark:text-gray-400">
+              用户将日间/夜间主题设为“平台默认”时，分别使用对应的日间/夜间默认主题；未单独设置时使用通用默认主题。
+            </span>
           </n-form-item>
           <n-form-item label="平台主题数">
             <span class="text-sm text-gray-600 dark:text-gray-400">{{ platformThemes.length }}/50</span>
@@ -632,26 +675,34 @@ defineExpose<AdminThemeStyleExpose>({
                   <div class="theme-list-item__main">
                     <div class="theme-list-item__title">
                       <span>{{ theme.name }}</span>
-                      <n-tag v-if="model.defaultPlatformThemeId === theme.id" size="small" type="success" round>默认</n-tag>
+                      <n-tag
+                        v-for="tag in getPlatformThemeDefaultTags(theme.id)"
+                        :key="tag"
+                        size="small"
+                        type="success"
+                        round
+                      >
+                        {{ tag }}
+                      </n-tag>
                     </div>
                     <div class="theme-list-item__meta">
                       <span>更新时间：{{ formatTimestamp(theme.updatedAt) }}</span>
                     </div>
                   </div>
                   <div class="theme-list-item__actions">
-                    <n-button
-                      size="small"
-                      secondary
-                      @click="handleToggleDefault(theme.id)"
+                    <n-dropdown
+                      trigger="click"
+                      :options="getPlatformThemeDefaultMenuOptions(theme.id)"
+                      @select="(key: PlatformThemeDefaultKey) => handleToggleDefault(theme.id, key)"
                     >
-                      {{ model.defaultPlatformThemeId === theme.id ? '取消默认' : '设为默认' }}
-                    </n-button>
+                      <n-button size="small" secondary>默认设置</n-button>
+                    </n-dropdown>
                     <n-button size="small" secondary @click="exportPlatformTheme(theme)">导出</n-button>
                     <n-popconfirm @positive-click="handleDeleteTheme(theme.id)">
                       <template #trigger>
                         <n-button size="small" secondary type="error">删除</n-button>
                       </template>
-                      删除后若当前主题为默认主题，将自动清空默认主题。
+                      删除后若该主题被设为通用/日间/夜间默认主题，将自动清空对应设置。
                     </n-popconfirm>
                   </div>
                 </div>

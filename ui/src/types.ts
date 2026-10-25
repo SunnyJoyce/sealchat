@@ -468,6 +468,9 @@ export interface BackupInfo {
 export interface ThemeManagementConfig {
   platformThemes?: PlatformTheme[];
   defaultPlatformThemeId?: string;
+  // 日间/夜间默认主题；为空时回退到 defaultPlatformThemeId
+  defaultPlatformDayThemeId?: string;
+  defaultPlatformNightThemeId?: string;
   platformDice3DStyles?: Dice3DStylePreset[];
   defaultPlatformDice3DStyleId?: string;
 }
