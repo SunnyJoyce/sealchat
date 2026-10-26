@@ -75,6 +75,7 @@ const historyPoints = ref<StatusHistoryPoint[]>([]);
 const loading = ref(false);
 const forbidden = ref(false);
 const worldTable = ref<InstanceType<typeof StatusWorldTable> | null>(null);
+const isPlatformAdmin = computed(() => Boolean(user.checkPerm?.('mod_admin')));
 const historyLoading = ref(false);
 const refreshTimer = ref<number | null>(null);
 const historyFilterMode = ref<StatusFilterMode>('1h');
@@ -356,7 +357,7 @@ onBeforeUnmount(() => {
       v-if="forbidden"
       status="403"
       title="仅平台管理员可查看"
-      description="平台状态监测仅对平台管理员开放。"
+      description="平台管理员已将平台状态监测设为仅管理员可查看。"
     />
     <n-spin v-if="!forbidden" :show="loading">
       <section v-for="group in summaryGroups" :key="group.title" class="status-group">
@@ -405,8 +406,6 @@ onBeforeUnmount(() => {
       <div v-if="!summaryGroups.length" class="status-empty" role="status">暂无数据，正在等待第一次采样 ...</div>
     </n-spin>
 
-    <StatusWorldTable v-if="!forbidden" ref="worldTable" />
-
     <section v-if="!forbidden" class="status-history-section">
       <div class="status-history-section__header">
         <div class="status-history-section__copy">
@@ -452,6 +451,8 @@ onBeforeUnmount(() => {
         </div>
       </transition-group>
     </section>
+
+    <StatusWorldTable v-if="!forbidden && isPlatformAdmin" ref="worldTable" />
 
     <teleport to="body">
       <transition name="status-overlay">

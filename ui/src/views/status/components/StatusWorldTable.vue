@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, h, ref } from 'vue';
+import { computed, h, onBeforeUnmount, ref, watch } from 'vue';
 import dayjs from 'dayjs';
-import { NTag, useMessage, type DataTableColumns } from 'naive-ui';
+import { useDebounceFn } from '@vueuse/core';
+import { NTag, useMessage, type DataTableColumns, type DataTableSortState } from 'naive-ui';
 import { api } from '@/stores/_config';
 import { useUserStore } from '@/stores/user';
 import { formatStatusNumber } from '../status-history';
@@ -33,19 +34,13 @@ const user = useUserStore();
 const message = useMessage();
 
 const items = ref<AdminWorldStatusItem[]>([]);
+const total = ref(0);
+const page = ref(1);
+const pageSize = ref(20);
 const loading = ref(false);
 const keyword = ref('');
+const sortState = ref<DataTableSortState | null>(null);
 let requestSeq = 0;
-
-const filteredItems = computed(() => {
-  const query = keyword.value.trim().toLowerCase();
-  if (!query) {
-    return items.value;
-  }
-  return items.value.filter((item) =>
-    [item.name, item.description, item.ownerNickname].some((text) => (text || '').toLowerCase().includes(query)),
-  );
-});
 
 const formatTime = (value: number | string) => {
   if (!value) {
@@ -127,7 +122,27 @@ const columns: DataTableColumns<AdminWorldStatusItem> = [
   },
 ];
 
-const pagination = { pageSize: 20 };
+const displayItems = computed(() => {
+  const state = sortState.value;
+  if (!state?.order) {
+    return items.value;
+  }
+  const column = columns.find((col) => 'key' in col && col.key === state.columnKey);
+  const sorter = column && 'sorter' in column && typeof column.sorter === 'function' ? column.sorter : null;
+  if (!sorter) {
+    return items.value;
+  }
+  const sorted = [...items.value].sort(sorter as (a: AdminWorldStatusItem, b: AdminWorldStatusItem) => number);
+  return state.order === 'descend' ? sorted.reverse() : sorted;
+});
+
+const pagination = computed(() => ({
+  page: page.value,
+  pageSize: pageSize.value,
+  itemCount: total.value,
+  pageSizes: [20, 50, 100],
+  showSizePicker: true,
+}));
 
 const refresh = async () => {
   const requestId = ++requestSeq;
@@ -135,11 +150,18 @@ const refresh = async () => {
   try {
     const resp = await api.get('api/v1/admin/worlds/status', {
       headers: { Authorization: user.token },
+      params: {
+        page: page.value,
+        pageSize: pageSize.value,
+        keyword: keyword.value.trim() || undefined,
+      },
     });
     if (requestId !== requestSeq) {
       return;
     }
-    items.value = (resp.data as { items?: AdminWorldStatusItem[] }).items || [];
+    const data = resp.data as { items?: AdminWorldStatusItem[]; total?: number };
+    items.value = data.items || [];
+    total.value = data.total ?? items.value.length;
   } catch (err) {
     const status = (err as { response?: { status?: number } })?.response?.status;
     if (requestId === requestSeq && status !== 401 && status !== 403) {
@@ -153,6 +175,33 @@ const refresh = async () => {
   }
 };
 
+const handlePageChange = (value: number) => {
+  page.value = value;
+  void refresh();
+};
+
+const handlePageSizeChange = (value: number) => {
+  pageSize.value = value;
+  page.value = 1;
+  void refresh();
+};
+
+const handleSorterChange = (state: DataTableSortState | DataTableSortState[] | null) => {
+  sortState.value = Array.isArray(state) ? state[0] ?? null : state;
+};
+
+const searchByKeyword = useDebounceFn(() => {
+  page.value = 1;
+  void refresh();
+}, 300);
+watch(keyword, () => {
+  void searchByKeyword();
+});
+
+onBeforeUnmount(() => {
+  requestSeq += 1;
+});
+
 defineExpose({ refresh });
 </script>
 
@@ -161,7 +210,7 @@ defineExpose({ refresh });
     <div class="status-world__header">
       <div>
         <h2>世界列表</h2>
-        <p>全部状态正常的世界（含私有世界），共 {{ items.length }} 个；计数约每分钟更新，在线人数为实时值。</p>
+        <p>全部状态正常的世界（含私有世界），共 {{ total }} 个；在线人数为实时值，列排序仅作用于当前页。</p>
       </div>
       <n-input
         v-model:value="keyword"
@@ -173,9 +222,13 @@ defineExpose({ refresh });
     </div>
     <n-data-table
       :columns="columns"
-      :data="filteredItems"
+      :data="displayItems"
       :loading="loading"
       :pagination="pagination"
+      remote
+      @update:page="handlePageChange"
+      @update:page-size="handlePageSizeChange"
+      @update:sorter="handleSorterChange"
       :row-key="(row: AdminWorldStatusItem) => row.id"
       :scroll-x="1100"
       size="small"

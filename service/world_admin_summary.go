@@ -1,8 +1,10 @@
 package service
 
 import (
-	"sync"
+	"strings"
 	"time"
+
+	"gorm.io/gorm"
 
 	"sealchat/model"
 )
@@ -24,46 +26,71 @@ type AdminWorldSummary struct {
 	MessageCharsOOC int64     `json:"messageCharsOoc"`
 }
 
-const adminWorldSummaryCacheTTL = time.Minute
+const (
+	adminWorldSummaryDefaultPageSize = 20
+	adminWorldSummaryMaxPageSize     = 100
+)
 
-var adminWorldSummaryCache struct {
-	mu      sync.Mutex
-	items   []AdminWorldSummary
-	expires time.Time
+// AdminWorldSummaryQuery 是管理员世界列表的分页与搜索参数。
+type AdminWorldSummaryQuery struct {
+	Page     int
+	PageSize int
+	Keyword  string // 匹配世界名称、简介或创建者昵称/用户名，不区分大小写
 }
 
-// AdminListWorldSummaries 返回全部正常状态世界（含私有世界）的概要信息，结果缓存一分钟。
-func AdminListWorldSummaries() ([]AdminWorldSummary, error) {
-	adminWorldSummaryCache.mu.Lock()
-	defer adminWorldSummaryCache.mu.Unlock()
-	if adminWorldSummaryCache.items != nil && time.Now().Before(adminWorldSummaryCache.expires) {
-		return adminWorldSummaryCache.items, nil
-	}
-	items, err := loadAdminWorldSummaries()
-	if err != nil {
-		return nil, err
-	}
-	adminWorldSummaryCache.items = items
-	adminWorldSummaryCache.expires = time.Now().Add(adminWorldSummaryCacheTTL)
-	return items, nil
+// AdminWorldSummaryPage 是管理员世界列表的一页结果。
+type AdminWorldSummaryPage struct {
+	Items    []AdminWorldSummary
+	Total    int64
+	Page     int
+	PageSize int
 }
 
-func loadAdminWorldSummaries() ([]AdminWorldSummary, error) {
+// AdminListWorldSummaries 按创建时间升序分页返回正常状态世界（含私有世界）的概要信息，各项计数只统计当前页的世界。
+func AdminListWorldSummaries(query AdminWorldSummaryQuery) (*AdminWorldSummaryPage, error) {
+	page := query.Page
+	if page < 1 {
+		page = 1
+	}
+	pageSize := query.PageSize
+	if pageSize < 1 {
+		pageSize = adminWorldSummaryDefaultPageSize
+	}
+	if pageSize > adminWorldSummaryMaxPageSize {
+		pageSize = adminWorldSummaryMaxPageSize
+	}
+	result := &AdminWorldSummaryPage{Items: []AdminWorldSummary{}, Page: page, PageSize: pageSize}
+
 	db := model.GetDB()
 	inactive := []string{"deleted", "archived"}
 
+	worldQuery := db.Table("worlds AS w").
+		Joins("LEFT JOIN users u ON u.id = w.owner_id").
+		Where("w.status NOT IN ?", inactive)
+	if keyword := strings.ToLower(strings.TrimSpace(query.Keyword)); keyword != "" {
+		like := "%" + keyword + "%"
+		worldQuery = worldQuery.Where(
+			"LOWER(COALESCE(w.name, '')) LIKE ? OR LOWER(COALESCE(w.description, '')) LIKE ? OR LOWER(COALESCE(u.nickname, '')) LIKE ? OR LOWER(COALESCE(u.username, '')) LIKE ?",
+			like, like, like, like,
+		)
+	}
+	worldQuery = worldQuery.Session(&gorm.Session{})
+	if err := worldQuery.Count(&result.Total).Error; err != nil {
+		return nil, err
+	}
 	var worlds []model.WorldModel
-	if err := db.Model(&model.WorldModel{}).
-		Select("id, name, description, visibility, owner_id, created_at").
-		Where("status NOT IN ?", inactive).
-		Order("created_at ASC, id ASC").
+	if err := worldQuery.
+		Select("w.id, w.name, w.description, w.visibility, w.owner_id, w.created_at").
+		Order("w.created_at ASC, w.id ASC").
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
 		Find(&worlds).Error; err != nil {
 		return nil, err
 	}
-	items := make([]AdminWorldSummary, 0, len(worlds))
 	if len(worlds) == 0 {
-		return items, nil
+		return result, nil
 	}
+	items := make([]AdminWorldSummary, 0, len(worlds))
 
 	worldIDs := make([]string, 0, len(worlds))
 	ownerIDs := make([]string, 0, len(worlds))
@@ -124,7 +151,7 @@ func loadAdminWorldSummaries() ([]AdminWorldSummary, error) {
 		channelStats[row.WorldID] = row
 	}
 
-	charRows, err := model.CountWorldMessageChars()
+	charRows, err := model.CountWorldMessageChars(worldIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -152,5 +179,6 @@ func loadAdminWorldSummaries() ([]AdminWorldSummary, error) {
 			MessageCharsOOC: chars.CharsOOC,
 		})
 	}
-	return items, nil
+	result.Items = items
+	return result, nil
 }

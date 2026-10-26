@@ -103,8 +103,11 @@ type WorldMessageCharStats struct {
 	CharsOOC int64  `gorm:"column:ooc_chars"`
 }
 
-// CountWorldMessageChars 按世界汇总未删除消息的可见字数（含场内/场外拆分），只统计正常状态的世界。
-func CountWorldMessageChars() ([]WorldMessageCharStats, error) {
+// CountWorldMessageChars 按世界汇总指定世界中未删除消息的可见字数（含场内/场外拆分），只统计正常状态的世界。
+func CountWorldMessageChars(worldIDs []string) ([]WorldMessageCharStats, error) {
+	if len(worldIDs) == 0 {
+		return nil, nil
+	}
 	lenExpr := visibleCharCountExpr("m.visible_char_count")
 	modeExpr := "LOWER(COALESCE(NULLIF(m.ic_mode, ''), 'ic'))"
 
@@ -118,7 +121,7 @@ func CountWorldMessageChars() ([]WorldMessageCharStats, error) {
 		).
 		Joins("JOIN channels c ON c.id = m.channel_id").
 		Joins("JOIN worlds w ON w.id = c.world_id").
-		Where("m.is_deleted = ? AND c.status <> ? AND w.status NOT IN ?", false, ChannelStatusDeleted, []string{"deleted", "archived"}).
+		Where("c.world_id IN ? AND m.is_deleted = ? AND c.status <> ? AND w.status NOT IN ?", worldIDs, false, ChannelStatusDeleted, []string{"deleted", "archived"}).
 		Group("c.world_id").
 		Scan(&rows).Error
 	return rows, err

@@ -777,6 +777,9 @@ export interface ServerConfig {
   certificate?: CertificateConfig;
   ai?: AIConfig;
   performanceProfiler?: PerformanceProfilerConfig;
+  statusPage?: {
+    adminOnly?: boolean;
+  };
 }
 
 export type UpdateChannel = 'stable' | 'test';

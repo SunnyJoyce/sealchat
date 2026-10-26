@@ -728,8 +728,8 @@ func Init(config *utils.AppConfig, uiStatic fs.FS) error {
 	v1Auth.Static("/attachments", uploadRoot)
 	v1Auth.Get("/gallery/thumbs/:filename", GalleryThumbServe)
 
-	v1Auth.Get("/status", UserRoleAdminMiddleware, StatusLatest)
-	v1Auth.Get("/status/history", UserRoleAdminMiddleware, StatusHistory)
+	v1Auth.Get("/status", StatusAccessMiddleware, StatusLatest)
+	v1Auth.Get("/status/history", StatusAccessMiddleware, StatusHistory)
 
 	audio := v1Auth.Group("/audio")
 	audio.Get("/library/settings", AudioLibrarySettingsGet)

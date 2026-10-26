@@ -526,6 +526,12 @@ type AppConfig struct {
 	PerformanceProfiler       PerformanceProfilerConfig `json:"performanceProfiler" yaml:"performanceProfiler"`
 	WebSocket                 WebSocketConfig           `json:"websocket" yaml:"websocket"`
 	ChannelEmbedTools         ChannelEmbedToolsConfig   `json:"channelEmbedTools" yaml:"channelEmbedTools"`
+	StatusPage                StatusPageConfig          `json:"statusPage" yaml:"statusPage"`
+}
+
+// StatusPageConfig 平台状态监测的访问设置；零值即允许所有登录用户查看。
+type StatusPageConfig struct {
+	AdminOnly bool `json:"adminOnly" yaml:"adminOnly"` // 仅平台管理员可查看平台状态监测
 }
 
 type ExportConfig struct {
@@ -2159,6 +2165,9 @@ func WriteConfigChecked(config *AppConfig) error {
 		_ = candidateK.Set("emailNotification.enabled", config.EmailNotification.Enabled)
 		_ = candidateK.Set("emailNotification.minDelayMinutes", config.EmailNotification.MinDelayMinutes)
 		_ = candidateK.Set("emailNotification.maxDelayMinutes", config.EmailNotification.MaxDelayMinutes)
+
+		// 平台状态监测配置
+		_ = candidateK.Set("statusPage.adminOnly", config.StatusPage.AdminOnly)
 
 		// 备份配置
 		_ = candidateK.Set("backup.enabled", config.Backup.Enabled)
