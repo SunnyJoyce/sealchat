@@ -1816,6 +1816,7 @@ export const useDisplayStore = defineStore('display', {
       const palette: DisplayPalette = query.matches ? 'night' : 'day'
       if (this.settings.palette !== palette) {
         this.settings.palette = palette
+        this.syncLegacyThemeSelectionFields()
         this.persist()
       }
       this.applyTheme()
@@ -1829,6 +1830,7 @@ export const useDisplayStore = defineStore('display', {
     },
     updateSettings(patch: Partial<DisplaySettings>) {
       this.settings = normalizeWith(this.settings, patch)
+      this.syncLegacyThemeSelectionFields()
       this.persist()
       if (this.settings.followSystemTheme) {
         this.syncSystemTheme()
@@ -1863,6 +1865,7 @@ export const useDisplayStore = defineStore('display', {
         // 旧版导出的配置没有日夜主题绑定，按旧字段推导
         Object.assign(this.settings, migrateLegacyPaletteThemeBindings(this.settings))
       }
+      this.syncLegacyThemeSelectionFields()
       this.persist()
       if (this.settings.followSystemTheme) {
         this.syncSystemTheme()
