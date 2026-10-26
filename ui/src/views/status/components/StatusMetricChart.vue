@@ -128,6 +128,7 @@ const chartOption = computed(() => {
     },
     yAxis: {
       type: 'value',
+      scale: Boolean(props.metric.scale),
       axisLabel: {
         color: chartColors.value.textColor,
         formatter: (value: number) => props.metric.format(value),

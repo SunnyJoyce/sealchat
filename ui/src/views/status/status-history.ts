@@ -5,6 +5,8 @@ export type StatusMetricKey =
   | 'concurrentConnections'
   | 'onlineUsers'
   | 'messagesPerMinute'
+  | 'registeredUsers'
+  | 'messageCount'
   | 'attachmentCount'
   | 'attachmentBytes';
 
@@ -45,6 +47,8 @@ export interface StatusMetricDefinition {
   color: string;
   format: (value: number) => string;
   series?: StatusMetricSeriesDefinition[];
+  /** 累计型指标：Y 轴不从 0 起，便于看出增长 */
+  scale?: boolean;
 }
 
 export interface StatusMetricHistoryRow {
@@ -114,6 +118,20 @@ export const statusMetricDefinitions: Record<StatusMetricKey, StatusMetricDefini
     label: '消息/分钟',
     color: '#f97316',
     format: formatStatusNumber,
+  },
+  registeredUsers: {
+    key: 'registeredUsers',
+    label: '注册用户',
+    color: '#db2777',
+    format: formatStatusNumber,
+    scale: true,
+  },
+  messageCount: {
+    key: 'messageCount',
+    label: '消息总数',
+    color: '#4f46e5',
+    format: formatStatusNumber,
+    scale: true,
   },
   attachmentCount: {
     key: 'attachmentCount',
