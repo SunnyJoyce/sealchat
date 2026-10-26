@@ -2517,8 +2517,15 @@ export const useAudioStudioStore = defineStore('audioStudio', {
         this.upsertAssetLocally(asset);
         return asset;
       }
+      const isOthersRestricted = (item: AudioAsset) => item.visibility === 'restricted' && item.createdBy !== useUserStore().info.id;
+      const cached = this.audioLibraryResolveCache[assetId];
+      if (cached && isOthersRestricted(cached)) return cached;
       const resp = await api.get(`/api/v1/audio/assets/${assetId}`);
       const asset = normalizeAudioAsset(resp.data as AudioAsset);
+      if (isOthersRestricted(asset)) {
+        this.audioLibraryResolveCache[asset.id] = asset;
+        return asset;
+      }
       this.upsertAssetLocally(asset);
       await audioDb.assets.put(toCachedMeta(asset));
       return asset;

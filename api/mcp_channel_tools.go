@@ -283,7 +283,7 @@ func mcpAudioTools() []mcpToolSpec {
 			if err != nil {
 				return nil, err
 			}
-			rows, total, err := service.AudioListAssets(service.AudioAssetFilters{Query: in.Query, Page: page, PageSize: limit, Scope: model.AudioScopeWorld, WorldID: &in.WorldID, IncludeCommon: true, ExcludeTags: []string{service.TheaterFeatureAudioTag}})
+			rows, total, err := service.AudioListAssets(service.AudioAssetFilters{Query: in.Query, Page: page, PageSize: limit, Scope: model.AudioScopeWorld, WorldID: &in.WorldID, IncludeCommon: true, ViewerID: a.User.ID, ExcludeTags: []string{service.TheaterFeatureAudioTag}})
 			if err != nil {
 				return nil, err
 			}
