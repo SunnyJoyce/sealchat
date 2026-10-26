@@ -9,8 +9,8 @@ import {
   createDefaultDisplaySettings,
   useDisplayStore,
   type DisplaySettings,
-  type ThemeSelectionMode,
 } from '@/stores/display'
+import { describePaletteThemeSelection } from '@/services/theme/themeSelection'
 import { useOnboardingStore } from '@/stores/onboarding'
 import {
   downloadDisplaySettingsTransfer,
@@ -87,29 +87,6 @@ const paletteModeOptions: Array<{ label: string; value: PaletteMode }> = [
   { label: '夜间模式', value: 'night' },
 ]
 const activePaletteMode = computed<PaletteMode>(() => draft.followSystemTheme ? 'system' : draft.palette)
-const systemThemeOptions = computed(() => [
-  { label: '系统基础配色', value: 'base:' },
-  ...display.platformThemes.map(theme => ({ label: `平台 · ${theme.name}`, value: `platform:${theme.id}` })),
-  ...display.settings.customThemes.map(theme => ({ label: `个人 · ${theme.name}`, value: `personal:${theme.id}` })),
-])
-const parseSystemThemeBinding = (value: string): DisplaySettings['systemDayTheme'] => {
-  const [source, themeId = ''] = value.split(':', 2)
-  if ((source === 'platform' || source === 'personal') && themeId) {
-    return { source, themeId }
-  }
-  return { source: 'base', themeId: null }
-}
-const formatSystemThemeBinding = (binding: DisplaySettings['systemDayTheme']) => (
-  binding.source === 'base' || !binding.themeId ? 'base:' : `${binding.source}:${binding.themeId}`
-)
-const systemDayThemeValue = computed({
-  get: () => formatSystemThemeBinding(draft.systemDayTheme),
-  set: value => { draft.systemDayTheme = parseSystemThemeBinding(value) },
-})
-const systemNightThemeValue = computed({
-  get: () => formatSystemThemeBinding(draft.systemNightTheme),
-  set: value => { draft.systemNightTheme = parseSystemThemeBinding(value) },
-})
 const setPaletteMode = (mode: PaletteMode) => {
   if (mode === 'system') {
     draft.followSystemTheme = true
@@ -147,12 +124,6 @@ const composerHintsPositionOptions: Array<{ label: string; value: DisplaySetting
 const editingSelfActionsPlacementOptions: Array<{ label: string; value: DisplaySettings['editingSelfActionsPlacement'] }> = [
   { label: '左置', value: 'left' },
   { label: '右置', value: 'right' },
-]
-const themeSelectionModeOptions: Array<{ label: string; value: ThemeSelectionMode }> = [
-  { label: '平台预设主题', value: 'inherit' },
-  { label: '选择平台主题', value: 'platform' },
-  { label: '选择个人主题', value: 'personal' },
-  { label: '关闭额外主题', value: 'none' },
 ]
 
 const syncFavoriteBar = (source?: DisplaySettings) => {
@@ -322,7 +293,7 @@ const handleRestoreDefaults = () => {
   Object.assign(draft, defaults)
   syncTriggerDrafts(defaults)
   syncFavoriteBar(props.settings)
-  display.setThemeSelectionMode('inherit')
+  display.resetPaletteThemeBindings()
 }
 
 const handleNotificationSettingsUpdate = (patch: Partial<DisplaySettings>) => {
@@ -474,38 +445,16 @@ const handleOpenTutorialHub = () => {
   emit('update:visible', false)
 }
 
-const resolvedThemeSelection = computed(() => display.getResolvedThemeSelection())
-const resolvedThemeLabel = computed(() => {
-  const resolvedTheme = resolvedThemeSelection.value.theme
-  if (!resolvedTheme) {
-    if (display.settings.themeSelectionMode === 'inherit') {
-      return '当前未设置平台默认主题，将回退到日间/夜间基础配色'
-    }
-    if (display.settings.themeSelectionMode === 'none') {
-      return '当前仅使用日间/夜间基础配色'
-    }
-    return '当前无可用主题，已回退到安全模式'
-  }
-  if (resolvedThemeSelection.value.source === 'platform') {
-    return resolvedThemeSelection.value.resolvedMode === 'inherit'
-      ? `当前继承平台默认主题：${resolvedTheme.name}`
-      : `当前使用平台主题：${resolvedTheme.name}`
-  }
-  return `当前使用个人主题：${resolvedTheme.name}`
-})
+const paletteThemeSummaries = computed(() => (['day', 'night'] as const).map((palette) => ({
+  palette,
+  label: palette === 'day' ? '日间主题' : '夜间主题',
+  active: display.palette === palette,
+  themeLabel: describePaletteThemeSelection(
+    display.getPaletteThemeBinding(palette),
+    display.getResolvedThemeSelection(undefined, palette),
+  ),
+})))
 const themeManagerMetaLabel = computed(() => `平台主题 ${display.platformThemes.length} · 个人主题 ${display.settings.customThemes.length}`)
-const handleThemeSelectionModeUpdate = (mode: ThemeSelectionMode) => {
-  if (mode === 'platform' && display.platformThemes.length === 0) {
-    message.warning('平台暂无可选主题')
-    return
-  }
-  if (mode === 'personal' && display.settings.customThemes.length === 0) {
-    customThemePanelVisible.value = true
-    message.info('先创建一个个人主题')
-    return
-  }
-  display.setThemeSelectionMode(mode)
-}
 </script>
 
 <template>
@@ -563,7 +512,7 @@ const handleThemeSelectionModeUpdate = (mode: ThemeSelectionMode) => {
         <header>
           <div>
             <p class="section-title">主题</p>
-            <p class="section-desc">在日间/夜间之间切换沉浸背景</p>
+            <p class="section-desc">在日间/夜间模式切换，或跟随系统自动切换</p>
           </div>
         </header>
         <div class="setting-mode-grid palette-mode-grid">
@@ -581,51 +530,31 @@ const handleThemeSelectionModeUpdate = (mode: ThemeSelectionMode) => {
             <span class="setting-mode-button__label">{{ option.label }}</span>
           </n-button>
         </div>
-        <div v-if="draft.followSystemTheme" class="system-theme-bindings">
-          <div class="system-theme-binding">
-            <span class="system-theme-binding__label">日间主题</span>
-            <n-select
-              v-model:value="systemDayThemeValue"
-              :options="systemThemeOptions"
-              size="small"
-            />
-          </div>
-          <div class="system-theme-binding">
-            <span class="system-theme-binding__label">夜间主题</span>
-            <n-select
-              v-model:value="systemNightThemeValue"
-              :options="systemThemeOptions"
-              size="small"
-            />
-          </div>
-        </div>
       </section>
 
       <section v-if="activeSettingsCategory === 'appearance'" class="display-settings__section display-settings__section--wide">
         <header>
           <div>
             <p class="section-title">主题管理</p>
-            <p class="section-desc">管理平台与个人主题</p>
+            <p class="section-desc">分别为日间与夜间指定平台主题或个人主题，并管理个人主题库</p>
           </div>
         </header>
-        <div class="theme-management-mode-grid">
-          <n-button
-            v-for="option in themeSelectionModeOptions"
-            :key="option.value"
-            size="small"
-            block
-            class="theme-mode-button"
-            :type="display.settings.themeSelectionMode === option.value ? 'primary' : 'default'"
-            :secondary="display.settings.themeSelectionMode !== option.value"
-            :aria-pressed="display.settings.themeSelectionMode === option.value"
-            @click="handleThemeSelectionModeUpdate(option.value)"
-          >
-            <span class="theme-mode-button__label">{{ option.label }}</span>
-          </n-button>
-        </div>
         <div class="theme-management-row">
           <div class="theme-management-summary">
-            <span class="active-theme-name">{{ resolvedThemeLabel }}</span>
+            <div class="palette-theme-summary">
+              <div
+                v-for="item in paletteThemeSummaries"
+                :key="item.palette"
+                class="palette-theme-summary__item"
+                :class="{ 'palette-theme-summary__item--active': item.active }"
+              >
+                <span class="palette-theme-summary__label">
+                  {{ item.label }}
+                  <span v-if="item.active" class="palette-theme-summary__current">当前</span>
+                </span>
+                <span class="active-theme-name">{{ item.themeLabel }}</span>
+              </div>
+            </div>
             <span class="theme-management-meta">{{ themeManagerMetaLabel }}</span>
           </div>
           <n-button secondary size="small" @click="customThemePanelVisible = true">
@@ -2229,8 +2158,7 @@ const handleThemeSelectionModeUpdate = (mode: ThemeSelectionMode) => {
   flex-wrap: wrap;
 }
 
-.setting-mode-grid,
-.theme-management-mode-grid {
+.setting-mode-grid {
   margin-bottom: 0.75rem;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 180px));
@@ -2238,8 +2166,7 @@ const handleThemeSelectionModeUpdate = (mode: ThemeSelectionMode) => {
   gap: 0.5rem;
 }
 
-.setting-mode-button,
-.theme-mode-button {
+.setting-mode-button {
   width: 100%;
   min-height: 32px;
 }
@@ -2252,28 +2179,43 @@ const handleThemeSelectionModeUpdate = (mode: ThemeSelectionMode) => {
   grid-template-columns: repeat(3, minmax(100px, 160px));
 }
 
-.system-theme-bindings {
+.palette-theme-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(180px, 1fr));
-  gap: 0.6rem;
-  margin-top: -0.15rem;
-}
-
-.system-theme-binding {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
   gap: 0.5rem;
 }
 
-.system-theme-binding__label {
-  color: var(--sc-text-secondary);
-  font-size: 0.8rem;
-  white-space: nowrap;
+.palette-theme-summary__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--sc-border-mute);
+  border-radius: 6px;
 }
 
-.setting-mode-button__label,
-.theme-mode-button__label {
+.palette-theme-summary__item--active {
+  border-color: var(--primary-color, #3388de);
+}
+
+.palette-theme-summary__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--sc-text-primary);
+}
+
+.palette-theme-summary__current {
+  font-size: 0.7rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  color: var(--primary-color, #3388de);
+  background: rgba(51, 136, 222, 0.12);
+}
+
+.setting-mode-button__label {
   display: inline-flex;
   width: 100%;
   justify-content: center;
@@ -2437,8 +2379,7 @@ const handleThemeSelectionModeUpdate = (mode: ThemeSelectionMode) => {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .setting-mode-grid,
-  .theme-management-mode-grid {
+  .setting-mode-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -2446,7 +2387,7 @@ const handleThemeSelectionModeUpdate = (mode: ThemeSelectionMode) => {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .system-theme-bindings {
+  .palette-theme-summary {
     grid-template-columns: 1fr;
   }
 

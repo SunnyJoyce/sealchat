@@ -15,13 +15,16 @@ import {
   normalizeOnlineCharacterCardsEnabled,
 } from './displayCharacterCardSettings'
 import {
+  migrateLegacyPaletteThemeBindings,
   migrateLegacyThemeSelection,
-  resolveCustomThemeEnabledUpdate,
-  resolveEffectiveThemeSelection,
+  normalizePaletteThemeBinding,
+  resolvePaletteDefaultPlatformThemeId,
+  resolvePaletteThemeSelection,
 } from '@/services/theme/themeSelection'
 import type {
   CustomTheme,
   CustomThemeColors,
+  PaletteThemeBinding,
   PlatformTheme,
   ThemeSelectionMode,
 } from '@/services/theme/themeTypes'
@@ -40,7 +43,14 @@ export type BotBadgeStyle = 'solidBlue' | 'solidTone' | 'outline' | 'dice'
 export type EditingSelfActionsPlacement = 'left' | 'right'
 export type InterjectSwitchRule = 'invert' | 'preserve' | 'forceOoc' | 'forceIc'
 export type ComposerHintsPosition = 'left' | 'center' | 'right'
-export type { CustomTheme, CustomThemeColors, PlatformTheme, ThemeSelectionMode } from '@/services/theme/themeTypes'
+export type {
+  CustomTheme,
+  CustomThemeColors,
+  PaletteThemeBinding,
+  PaletteThemeSource,
+  PlatformTheme,
+  ThemeSelectionMode,
+} from '@/services/theme/themeTypes'
 
 export interface FavoriteHotkey {
   combo: string
@@ -76,8 +86,11 @@ export interface DisplaySettings {
   layout: DisplayLayout
   palette: DisplayPalette
   followSystemTheme: boolean
+  // 旧版“跟随系统”的日夜主题绑定，仅用于迁移与回退兼容；实际生效以 day/nightThemeBinding 为准
   systemDayTheme: SystemThemeBinding
   systemNightTheme: SystemThemeBinding
+  dayThemeBinding: PaletteThemeBinding
+  nightThemeBinding: PaletteThemeBinding
   sidebarWidth: number         // 左侧频道栏宽度 (px)
   channelNameWrapEnabled: boolean // 侧栏频道名自动换行
   showAvatar: boolean
@@ -570,6 +583,8 @@ export const createDefaultDisplaySettings = (): DisplaySettings => ({
   followSystemTheme: false,
   systemDayTheme: { source: 'base', themeId: null },
   systemNightTheme: { source: 'base', themeId: null },
+  dayThemeBinding: { source: 'inherit', themeId: null },
+  nightThemeBinding: { source: 'inherit', themeId: null },
   sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
   channelNameWrapEnabled: false,
   showAvatar: true,
@@ -783,6 +798,15 @@ interface ParsedStoredSettingsResult {
   migrated: boolean
 }
 
+const hasPaletteThemeBindings = (value: unknown) => (
+  !!value
+  && typeof value === 'object'
+  && (
+    Object.prototype.hasOwnProperty.call(value, 'dayThemeBinding')
+    || Object.prototype.hasOwnProperty.call(value, 'nightThemeBinding')
+  )
+)
+
 const parseStoredSettingsInternal = (
   raw: string | null | undefined,
   migrateLegacyDefaults = true,
@@ -826,6 +850,8 @@ const parseStoredSettingsInternal = (
       followSystemTheme: coerceBoolean((parsed as any)?.followSystemTheme ?? false),
       systemDayTheme: normalizeSystemThemeBinding((parsed as any)?.systemDayTheme),
       systemNightTheme: normalizeSystemThemeBinding((parsed as any)?.systemNightTheme),
+      dayThemeBinding: normalizePaletteThemeBinding((parsed as any)?.dayThemeBinding),
+      nightThemeBinding: normalizePaletteThemeBinding((parsed as any)?.nightThemeBinding),
       sidebarWidth: coerceNumberInRange(
         (parsed as any)?.sidebarWidth,
         SIDEBAR_WIDTH_DEFAULT,
@@ -1024,6 +1050,10 @@ const parseStoredSettingsInternal = (
       dice3dEnabled: coerceBoolean((parsed as any)?.dice3dEnabled ?? true),
     }
 
+    if (!hasPaletteThemeBindings(parsed)) {
+      Object.assign(settings, migrateLegacyPaletteThemeBindings(settings))
+    }
+
     if (!migrateLegacyDefaults) {
       return { settings, migrated: false }
     }
@@ -1118,6 +1148,14 @@ const normalizeWith = (base: DisplaySettings, patch?: Partial<DisplaySettings>):
     patch && Object.prototype.hasOwnProperty.call(patch, 'systemNightTheme')
       ? normalizeSystemThemeBinding((patch as any).systemNightTheme)
       : { ...base.systemNightTheme },
+  dayThemeBinding:
+    patch && Object.prototype.hasOwnProperty.call(patch, 'dayThemeBinding')
+      ? normalizePaletteThemeBinding((patch as any).dayThemeBinding)
+      : { ...base.dayThemeBinding },
+  nightThemeBinding:
+    patch && Object.prototype.hasOwnProperty.call(patch, 'nightThemeBinding')
+      ? normalizePaletteThemeBinding((patch as any).nightThemeBinding)
+      : { ...base.nightThemeBinding },
   sidebarWidth:
     patch && Object.prototype.hasOwnProperty.call(patch, 'sidebarWidth')
       ? coerceNumberInRange((patch as any).sidebarWidth, SIDEBAR_WIDTH_DEFAULT, SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX)
@@ -1561,6 +1599,8 @@ export const useDisplayStore = defineStore('display', {
     settings: loadSettings(),
     platformThemes: [] as PlatformTheme[],
     defaultPlatformThemeId: '',
+    defaultPlatformDayThemeId: '',
+    defaultPlatformNightThemeId: '',
     customThemePreviewEnabled: false,
     customThemePreviewColors: {} as CustomThemeColors,
   }),
@@ -1776,6 +1816,7 @@ export const useDisplayStore = defineStore('display', {
       const palette: DisplayPalette = query.matches ? 'night' : 'day'
       if (this.settings.palette !== palette) {
         this.settings.palette = palette
+        this.syncLegacyThemeSelectionFields()
         this.persist()
       }
       this.applyTheme()
@@ -1789,6 +1830,7 @@ export const useDisplayStore = defineStore('display', {
     },
     updateSettings(patch: Partial<DisplaySettings>) {
       this.settings = normalizeWith(this.settings, patch)
+      this.syncLegacyThemeSelectionFields()
       this.persist()
       if (this.settings.followSystemTheme) {
         this.syncSystemTheme()
@@ -1819,6 +1861,11 @@ export const useDisplayStore = defineStore('display', {
     },
     async replaceSettings(snapshot: Partial<DisplaySettings>, options?: { restoreFontAsset?: boolean }) {
       this.settings = normalizeWith(defaultSettings(), snapshot)
+      if (!hasPaletteThemeBindings(snapshot)) {
+        // 旧版导出的配置没有日夜主题绑定，按旧字段推导
+        Object.assign(this.settings, migrateLegacyPaletteThemeBindings(this.settings))
+      }
+      this.syncLegacyThemeSelectionFields()
       this.persist()
       if (this.settings.followSystemTheme) {
         this.syncSystemTheme()
@@ -1848,15 +1895,21 @@ export const useDisplayStore = defineStore('display', {
         console.warn('常规设置设置写入失败', error)
       }
     },
-    syncPlatformThemeManagement(payload?: { platformThemes?: PlatformTheme[]; defaultPlatformThemeId?: string | null } | null) {
+    syncPlatformThemeManagement(payload?: {
+      platformThemes?: PlatformTheme[]
+      defaultPlatformThemeId?: string | null
+      defaultPlatformDayThemeId?: string | null
+      defaultPlatformNightThemeId?: string | null
+    } | null) {
       const normalizedThemes = normalizePlatformThemes(payload?.platformThemes)
-      const normalizedDefaultId = typeof payload?.defaultPlatformThemeId === 'string'
-        ? payload.defaultPlatformThemeId.trim()
-        : ''
+      const pickExistingId = (value?: string | null) => {
+        const id = typeof value === 'string' ? value.trim() : ''
+        return normalizedThemes.some((item) => item.id === id) ? id : ''
+      }
       this.platformThemes = normalizedThemes
-      this.defaultPlatformThemeId = normalizedThemes.some((item) => item.id === normalizedDefaultId)
-        ? normalizedDefaultId
-        : ''
+      this.defaultPlatformThemeId = pickExistingId(payload?.defaultPlatformThemeId)
+      this.defaultPlatformDayThemeId = pickExistingId(payload?.defaultPlatformDayThemeId)
+      this.defaultPlatformNightThemeId = pickExistingId(payload?.defaultPlatformNightThemeId)
 
       if (
         this.settings.themeSelectionMode === 'platform'
@@ -1867,17 +1920,46 @@ export const useDisplayStore = defineStore('display', {
         this.settings.activePlatformThemeId = null
         this.persist()
       }
+      let bindingsChanged = false
+      for (const key of ['dayThemeBinding', 'nightThemeBinding'] as const) {
+        const binding = this.settings[key]
+        if (binding.source === 'platform' && !this.platformThemes.some((item) => item.id === binding.themeId)) {
+          this.settings[key] = { source: 'inherit', themeId: null }
+          bindingsChanged = true
+        }
+      }
+      if (bindingsChanged) {
+        this.syncLegacyThemeSelectionFields()
+        this.persist()
+      }
 
       this.applyTheme()
     },
-    getResolvedThemeSelection(target?: DisplaySettings) {
-      return resolveEffectiveThemeSelection({
-        selectionMode: (target || this.settings).themeSelectionMode,
-        activePlatformThemeId: (target || this.settings).activePlatformThemeId,
-        activePersonalThemeId: (target || this.settings).activeCustomThemeId,
+    getPaletteThemeBinding(palette: DisplayPalette, target?: DisplaySettings): PaletteThemeBinding {
+      const source = target || this.settings
+      return palette === 'day' ? source.dayThemeBinding : source.nightThemeBinding
+    },
+    getPaletteDefaultPlatformTheme(palette: DisplayPalette): PlatformTheme | null {
+      const id = resolvePaletteDefaultPlatformThemeId({
+        palette,
         platformThemes: this.platformThemes,
         defaultPlatformThemeId: this.defaultPlatformThemeId,
-        personalThemes: (target || this.settings).customThemes,
+        defaultPlatformDayThemeId: this.defaultPlatformDayThemeId,
+        defaultPlatformNightThemeId: this.defaultPlatformNightThemeId,
+      })
+      return id ? this.platformThemes.find((item) => item.id === id) || null : null
+    },
+    getResolvedThemeSelection(target?: DisplaySettings, palette?: DisplayPalette) {
+      const source = target || this.settings
+      const resolvedPalette = palette || source.palette
+      return resolvePaletteThemeSelection({
+        binding: this.getPaletteThemeBinding(resolvedPalette, source),
+        palette: resolvedPalette,
+        platformThemes: this.platformThemes,
+        defaultPlatformThemeId: this.defaultPlatformThemeId,
+        defaultPlatformDayThemeId: this.defaultPlatformDayThemeId,
+        defaultPlatformNightThemeId: this.defaultPlatformNightThemeId,
+        personalThemes: source.customThemes,
       })
     },
     applyTheme(target?: DisplaySettings) {
@@ -1933,16 +2015,7 @@ export const useDisplayStore = defineStore('display', {
       // Clear previous custom colors first
       customColorVars.forEach(v => removeVar(v))
 
-      const resolvedSelection = this.getResolvedThemeSelection(effective)
-      const systemBinding = effective.palette === 'night' ? effective.systemNightTheme : effective.systemDayTheme
-      const systemTheme = effective.followSystemTheme && systemBinding.source === 'platform'
-        ? this.platformThemes.find(theme => theme.id === systemBinding.themeId) || null
-        : effective.followSystemTheme && systemBinding.source === 'personal'
-          ? effective.customThemes.find(theme => theme.id === systemBinding.themeId) || null
-          : null
-      const activeThemeColors = effective.followSystemTheme
-        ? systemTheme?.colors || null
-        : resolvedSelection.theme?.colors || null
+      const activeThemeColors = this.getResolvedThemeSelection(effective).theme?.colors || null
       const previewColors = this.customThemePreviewEnabled ? this.customThemePreviewColors : null
       const sourceColors = previewColors || activeThemeColors
 
@@ -2009,35 +2082,42 @@ export const useDisplayStore = defineStore('display', {
       }
     },
     // Custom theme management
-    getActiveCustomTheme(): CustomTheme | null {
-      if (!this.settings.activeCustomThemeId) return null
-      return this.settings.customThemes.find(t => t.id === this.settings.activeCustomThemeId) || null
+    setPaletteThemeBinding(palette: DisplayPalette, binding: PaletteThemeBinding) {
+      const normalized = normalizePaletteThemeBinding(binding)
+      if (palette === 'day') {
+        this.settings.dayThemeBinding = normalized
+      } else {
+        this.settings.nightThemeBinding = normalized
+      }
+      this.syncLegacyThemeSelectionFields()
+      this.persist()
+      this.applyTheme()
     },
-    setThemeSelectionMode(mode: ThemeSelectionMode) {
-      this.settings.themeSelectionMode = mode
-      if (mode === 'platform' && !this.settings.activePlatformThemeId) {
-        this.settings.activePlatformThemeId = this.defaultPlatformThemeId || this.platformThemes[0]?.id || null
-      }
-      if (mode !== 'platform') {
-        this.settings.activePlatformThemeId = mode === 'inherit' ? null : this.settings.activePlatformThemeId
-      }
-      if (mode === 'personal') {
+    resetPaletteThemeBindings() {
+      this.settings.dayThemeBinding = { source: 'inherit', themeId: null }
+      this.settings.nightThemeBinding = { source: 'inherit', themeId: null }
+      this.syncLegacyThemeSelectionFields()
+      this.persist()
+      this.applyTheme()
+    },
+    // 将日夜绑定回写到旧版字段，便于回退到旧版本时保持相近的主题
+    syncLegacyThemeSelectionFields() {
+      const toLegacySystemBinding = (binding: PaletteThemeBinding): SystemThemeBinding => (
+        binding.source === 'platform' || binding.source === 'personal'
+          ? { source: binding.source, themeId: binding.themeId }
+          : { source: 'base', themeId: null }
+      )
+      this.settings.systemDayTheme = toLegacySystemBinding(this.settings.dayThemeBinding)
+      this.settings.systemNightTheme = toLegacySystemBinding(this.settings.nightThemeBinding)
+      const current = this.getPaletteThemeBinding(this.settings.palette)
+      this.settings.themeSelectionMode = current.source
+      this.settings.activePlatformThemeId = current.source === 'platform' ? current.themeId : null
+      if (current.source === 'personal') {
+        this.settings.activeCustomThemeId = current.themeId
         this.settings.customThemeEnabled = true
-      }
-      if (mode === 'none') {
-        this.settings.activePlatformThemeId = null
+      } else if (current.source === 'none') {
         this.settings.customThemeEnabled = false
-        this.customThemePreviewEnabled = false
-        this.customThemePreviewColors = {}
       }
-      this.persist()
-      this.applyTheme()
-    },
-    setActivePlatformTheme(id: string | null) {
-      this.settings.activePlatformThemeId = id
-      this.settings.themeSelectionMode = id ? 'platform' : 'inherit'
-      this.persist()
-      this.applyTheme()
     },
     saveCustomTheme(theme: CustomTheme) {
       const normalized = normalizeCustomTheme(theme)
@@ -2069,35 +2149,13 @@ export const useDisplayStore = defineStore('display', {
       if (this.settings.activeCustomThemeId === id) {
         this.settings.activeCustomThemeId = this.settings.customThemes[0]?.id || null
       }
-      if (this.settings.themeSelectionMode === 'personal' && !this.settings.activeCustomThemeId) {
-        this.settings.themeSelectionMode = 'inherit'
+      for (const key of ['dayThemeBinding', 'nightThemeBinding'] as const) {
+        const binding = this.settings[key]
+        if (binding.source === 'personal' && binding.themeId === id) {
+          this.settings[key] = { source: 'inherit', themeId: null }
+        }
       }
-      this.persist()
-      this.applyTheme()
-    },
-    activateCustomTheme(id: string | null) {
-      this.settings.activeCustomThemeId = id
-      if (id) {
-        this.settings.customThemeEnabled = true
-        this.settings.themeSelectionMode = 'personal'
-      } else if (this.settings.themeSelectionMode === 'personal') {
-        this.settings.themeSelectionMode = 'inherit'
-      }
-      this.persist()
-      this.applyTheme()
-    },
-    setCustomThemeEnabled(enabled: boolean) {
-      const next = resolveCustomThemeEnabledUpdate(enabled, {
-        themeSelectionMode: this.settings.themeSelectionMode,
-        activePlatformThemeId: this.settings.activePlatformThemeId,
-      })
-      this.settings.customThemeEnabled = next.customThemeEnabled
-      this.settings.themeSelectionMode = next.themeSelectionMode
-      this.settings.activePlatformThemeId = next.activePlatformThemeId
-      if (!enabled) {
-        this.customThemePreviewEnabled = false
-        this.customThemePreviewColors = {}
-      }
+      this.syncLegacyThemeSelectionFields()
       this.persist()
       this.applyTheme()
     },
