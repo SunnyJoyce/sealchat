@@ -1,0 +1,704 @@
+/*
+ * SealChat Cyberpunk Neon Reference Package
+ * ------------------------------------------
+ * 完整 UI Package 样式参考。
+ * 只使用 CSS，不执行 JavaScript。
+ *
+ * 稳定接口优先：
+ *   data-sc-surface / data-sc-palette / data-sc-layout / data-sc-ui
+ *
+ * 兼容性敏感区会在注释中注明。升级 SealChat 后应优先检查这些选择器。
+ */
+
+/* =========================================================
+ * 1. 基础设计令牌
+ * ======================================================= */
+
+:root[data-sc-surface] {
+  color-scheme: dark;
+
+  /* Cyberpunk package-local tokens */
+  --cyber-cyan: #21e6ff;
+  --cyber-cyan-soft: rgba(33, 230, 255, 0.18);
+  --cyber-magenta: #ff3fd2;
+  --cyber-magenta-soft: rgba(255, 63, 210, 0.16);
+  --cyber-lime: #b7ff3c;
+  --cyber-warning: #ffce3a;
+  --cyber-danger: #ff4365;
+  --cyber-void: #05070d;
+  --cyber-grid: rgba(33, 230, 255, 0.055);
+
+  /* SealChat page semantics */
+  --sc-bg-page: #05070d;
+  --sc-bg-surface: #0a1020;
+  --sc-bg-header: rgba(8, 14, 28, 0.92);
+  --sc-bg-sidebar: rgba(7, 13, 27, 0.94);
+  --sc-bg-input: #0c1528;
+  --sc-bg-elevated: #101a30;
+  --sc-bg-layer: #091121;
+  --sc-bg-layer-strong: rgba(10, 18, 35, 0.96);
+  --sc-bg-hover: rgba(33, 230, 255, 0.09);
+  --sc-bg-active: rgba(255, 63, 210, 0.12);
+
+  --sc-fg-primary: #e8fbff;
+  --sc-fg-muted: #8ea9b8;
+  --sc-text-primary: #e8fbff;
+  --sc-text-secondary: #8ea9b8;
+
+  --sc-border-mute: rgba(33, 230, 255, 0.15);
+  --sc-border-strong: rgba(33, 230, 255, 0.34);
+
+  --primary-color: #21e6ff;
+  --primary-color-hover: #ff3fd2;
+  --sc-action-ribbon-hover-text: #f7fdff;
+
+  --sc-badge-bg: rgba(33, 230, 255, 0.12);
+  --sc-badge-text: #d9fbff;
+  --sc-sidebar-hover: rgba(33, 230, 255, 0.08);
+  --sc-sidebar-active: rgba(255, 63, 210, 0.12);
+  --sc-chip-bg: rgba(33, 230, 255, 0.09);
+
+  --sc-scrollbar-size: 7px;
+  --sc-scrollbar-thumb: rgba(33, 230, 255, 0.28);
+  --sc-scrollbar-thumb-hover: rgba(255, 63, 210, 0.5);
+
+  --sc-font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
+  --sc-code-font: "Cascadia Code", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+
+  /* Traditional CustomThemeColors bridge */
+  --custom-chat-ic-bg: rgba(10, 23, 42, 0.92);
+  --custom-chat-ooc-bg: rgba(18, 10, 32, 0.92);
+  --custom-chat-stage-bg: #050913;
+  --custom-chat-preview-bg: rgba(16, 28, 50, 0.96);
+  --custom-chat-preview-dot: #21e6ff;
+  --custom-keyword-bg: rgba(255, 63, 210, 0.16);
+  --custom-keyword-border: #ff3fd2;
+
+  /* Chat semantic tokens */
+  --chat-stage-bg: #050913;
+  --chat-ic-bg: rgba(10, 23, 42, 0.92);
+  --chat-ooc-bg: rgba(18, 10, 32, 0.92);
+  --chat-preview-bg: rgba(16, 28, 50, 0.96);
+  --chat-preview-dot: #21e6ff;
+  --chat-preview-dot-ic: #21e6ff;
+  --chat-preview-dot-ooc: #ff3fd2;
+
+  --chat-text-primary: #e8fbff;
+  --chat-text-secondary: #8ea9b8;
+  --chat-border-mute: rgba(33, 230, 255, 0.13);
+  --chat-bubble-border: rgba(33, 230, 255, 0.24);
+  --chat-ooc-border: rgba(255, 63, 210, 0.25);
+
+  --chat-message-shadow:
+    0 0 0 1px rgba(33, 230, 255, 0.05),
+    0 12px 28px rgba(0, 0, 0, 0.38);
+  --chat-dice-result-shadow:
+    0 0 0 1px rgba(183, 255, 60, 0.18),
+    0 0 18px rgba(183, 255, 60, 0.08);
+
+  --chat-archived-bg: rgba(65, 74, 90, 0.25);
+  --chat-archived-border: rgba(142, 169, 184, 0.18);
+
+  --chat-whisper-accent: #ff3fd2;
+  --chat-whisper-surface: rgba(255, 63, 210, 0.04);
+  --chat-whisper-bg: rgba(255, 63, 210, 0.04);
+  --chat-whisper-border: rgba(255, 63, 210, 0.25);
+  --chat-whisper-tag-bg: rgba(255, 63, 210, 0.12);
+  --chat-whisper-tag-fg: #ffd5f5;
+
+  --chat-inline-code-bg: rgba(33, 230, 255, 0.1);
+  --chat-inline-code-fg: #bff8ff;
+  --chat-inline-code-border: rgba(33, 230, 255, 0.28);
+
+  --chat-editing-preview-bg: rgba(15, 27, 49, 0.96);
+  --chat-editing-preview-ic-bg: rgba(10, 23, 42, 0.96);
+  --chat-editing-preview-ooc-bg: rgba(33, 12, 43, 0.96);
+  --chat-live-preview-ic-bg: rgba(10, 23, 42, 0.9);
+  --chat-live-preview-ooc-bg: rgba(33, 12, 43, 0.9);
+
+  /* Audio */
+  --audio-panel-surface: rgba(8, 15, 30, 0.96);
+  --audio-panel-border: rgba(33, 230, 255, 0.18);
+  --audio-panel-shadow: 0 20px 45px rgba(0, 0, 0, 0.52);
+  --audio-card-surface: rgba(13, 23, 43, 0.9);
+  --audio-card-border: rgba(255, 63, 210, 0.16);
+  --audio-progress-track: rgba(142, 169, 184, 0.14);
+  --audio-progress-buffer: rgba(33, 230, 255, 0.22);
+
+  /* Glass */
+  --sc-glass-bg: rgba(8, 16, 30, 0.72);
+  --sc-glass-solid: rgb(8, 16, 30);
+  --sc-glass-border: rgba(33, 230, 255, 0.22);
+  --sc-glass-shadow: 0 16px 42px rgba(0, 0, 0, 0.38);
+  --sc-glass-blur: 14px;
+  --sc-glass-saturate: 145%;
+  --sc-glass-contrast: 106%;
+
+  /* Keyword derived values used by existing styles */
+  --keyword-bg: rgba(255, 63, 210, 0.16);
+  --keyword-border-color: #ff3fd2;
+}
+
+/* =========================================================
+ * 2. Day / Night palette variants
+ * ======================================================= */
+
+:root[data-sc-palette='day'] {
+  color-scheme: light;
+
+  --cyber-void: #eafaff;
+  --cyber-grid: rgba(0, 112, 144, 0.08);
+
+  --sc-bg-page: #eafaff;
+  --sc-bg-surface: rgba(248, 253, 255, 0.94);
+  --sc-bg-header: rgba(238, 251, 255, 0.94);
+  --sc-bg-sidebar: rgba(235, 248, 253, 0.96);
+  --sc-bg-input: #f7fdff;
+  --sc-bg-elevated: #ffffff;
+  --sc-bg-layer: #dff7ff;
+  --sc-bg-layer-strong: rgba(225, 248, 255, 0.96);
+  --sc-bg-hover: rgba(0, 160, 194, 0.08);
+  --sc-bg-active: rgba(220, 0, 164, 0.08);
+
+  --sc-fg-primary: #071824;
+  --sc-fg-muted: #476773;
+  --sc-text-primary: #071824;
+  --sc-text-secondary: #476773;
+  --chat-text-primary: #071824;
+  --chat-text-secondary: #476773;
+
+  --sc-border-mute: rgba(0, 124, 154, 0.14);
+  --sc-border-strong: rgba(0, 124, 154, 0.3);
+
+  --primary-color: #008eaa;
+  --primary-color-hover: #d000a5;
+  --sc-action-ribbon-hover-text: #00151d;
+
+  --sc-badge-bg: rgba(0, 142, 170, 0.1);
+  --sc-badge-text: #005c70;
+  --sc-sidebar-hover: rgba(0, 142, 170, 0.07);
+  --sc-sidebar-active: rgba(208, 0, 165, 0.08);
+  --sc-chip-bg: rgba(0, 142, 170, 0.08);
+
+  --custom-chat-ic-bg: rgba(232, 251, 255, 0.92);
+  --custom-chat-ooc-bg: rgba(255, 239, 250, 0.92);
+  --custom-chat-stage-bg: #e4faff;
+  --custom-chat-preview-bg: #f4fdff;
+  --custom-chat-preview-dot: #008eaa;
+
+  --chat-stage-bg: #e4faff;
+  --chat-ic-bg: rgba(232, 251, 255, 0.92);
+  --chat-ooc-bg: rgba(255, 239, 250, 0.92);
+  --chat-preview-bg: #f4fdff;
+  --chat-preview-dot: #008eaa;
+  --chat-preview-dot-ic: #008eaa;
+  --chat-preview-dot-ooc: #d000a5;
+  --chat-bubble-border: rgba(0, 142, 170, 0.18);
+  --chat-ooc-border: rgba(208, 0, 165, 0.18);
+  --chat-message-shadow: 0 10px 24px rgba(4, 62, 76, 0.09);
+
+  --chat-inline-code-bg: rgba(0, 142, 170, 0.08);
+  --chat-inline-code-fg: #005b6e;
+  --chat-inline-code-border: rgba(0, 142, 170, 0.22);
+
+  --custom-keyword-bg: rgba(208, 0, 165, 0.1);
+  --custom-keyword-border: #d000a5;
+  --keyword-bg: rgba(208, 0, 165, 0.1);
+  --keyword-border-color: #d000a5;
+
+  --audio-panel-surface: rgba(248, 253, 255, 0.97);
+  --audio-panel-border: rgba(0, 142, 170, 0.14);
+  --audio-panel-shadow: 0 18px 40px rgba(4, 62, 76, 0.12);
+  --audio-card-surface: rgba(238, 251, 255, 0.95);
+  --audio-card-border: rgba(208, 0, 165, 0.12);
+  --audio-progress-track: rgba(7, 24, 36, 0.08);
+  --audio-progress-buffer: rgba(0, 142, 170, 0.18);
+
+  --sc-glass-bg: rgba(240, 252, 255, 0.76);
+  --sc-glass-solid: rgb(240, 252, 255);
+  --sc-glass-border: rgba(0, 142, 170, 0.18);
+  --sc-glass-shadow: 0 15px 38px rgba(4, 62, 76, 0.13);
+}
+
+:root[data-sc-palette='night'] {
+  color-scheme: dark;
+}
+
+/* =========================================================
+ * 3. Application canvas and cyber grid
+ * ======================================================= */
+
+:root[data-sc-surface] body {
+  background:
+    radial-gradient(circle at 18% 8%, rgba(33, 230, 255, 0.12), transparent 34%),
+    radial-gradient(circle at 82% 18%, rgba(255, 63, 210, 0.1), transparent 30%),
+    var(--sc-bg-page);
+  color: var(--sc-text-primary);
+}
+
+:root[data-sc-surface] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--cyber-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--cyber-grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.75), transparent 92%);
+}
+
+/* =========================================================
+ * 4. Stable UI hooks
+ * ======================================================= */
+
+[data-sc-ui='app'] {
+  color: var(--sc-text-primary);
+}
+
+[data-sc-ui='header'] {
+  position: relative;
+  background:
+    linear-gradient(90deg, rgba(33, 230, 255, 0.06), rgba(255, 63, 210, 0.045)),
+    var(--sc-bg-header) !important;
+  border-bottom: 1px solid var(--sc-border-strong) !important;
+  box-shadow:
+    0 1px 0 rgba(33, 230, 255, 0.08),
+    0 8px 26px rgba(0, 0, 0, 0.14);
+  backdrop-filter: blur(12px) saturate(140%);
+}
+
+[data-sc-ui='header']::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -1px;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--primary-color), var(--cyber-magenta), transparent);
+  opacity: 0.65;
+}
+
+[data-sc-ui='sidebar'] {
+  background:
+    linear-gradient(180deg, rgba(33, 230, 255, 0.035), transparent 28%),
+    var(--sc-bg-sidebar) !important;
+  border-right: 1px solid var(--sc-border-mute);
+  box-shadow: inset -1px 0 0 rgba(255, 63, 210, 0.04);
+}
+
+[data-sc-ui='channel-list'] {
+  gap: 3px;
+}
+
+[data-sc-ui='channel-list'] :is(button, [role='button'], .n-button) {
+  border-radius: 6px !important;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease,
+    border-color 0.16s ease,
+    transform 0.16s ease;
+}
+
+[data-sc-ui='channel-list'] :is(button, [role='button'], .n-button):hover {
+  transform: translateX(2px);
+}
+
+[data-sc-ui='message-list'] {
+  background:
+    linear-gradient(180deg, rgba(33, 230, 255, 0.02), transparent 20%),
+    transparent;
+}
+
+[data-sc-ui='message'] {
+  position: relative;
+  border-inline-start: 2px solid transparent;
+  border-radius: 8px;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
+}
+
+[data-sc-ui='message']:hover {
+  border-inline-start-color: color-mix(in srgb, var(--primary-color) 70%, transparent);
+  background: color-mix(in srgb, var(--sc-bg-surface) 52%, transparent);
+  box-shadow: inset 8px 0 24px rgba(33, 230, 255, 0.03);
+}
+
+[data-sc-ui='composer'] {
+  border-top: 1px solid var(--sc-border-mute);
+  background:
+    linear-gradient(90deg, rgba(33, 230, 255, 0.035), rgba(255, 63, 210, 0.025)),
+    color-mix(in srgb, var(--sc-bg-surface) 88%, transparent);
+  backdrop-filter: blur(14px) saturate(135%);
+  box-shadow: 0 -12px 28px rgba(0, 0, 0, 0.1);
+}
+
+[data-sc-ui='world-console'] {
+  --cyber-panel-accent: var(--primary-color);
+}
+
+[data-sc-ui='world-console'] :is(.n-card, .world-console__panel, .world-console__card) {
+  border-color: var(--sc-border-mute) !important;
+}
+
+[data-sc-ui='admin-settings'],
+[data-sc-ui='user-profile'] {
+  background:
+    linear-gradient(145deg, rgba(33, 230, 255, 0.045), rgba(255, 63, 210, 0.035)),
+    var(--sc-bg-elevated) !important;
+  color: var(--sc-text-primary) !important;
+  border-color: var(--sc-border-strong) !important;
+  box-shadow:
+    0 0 0 1px rgba(33, 230, 255, 0.05),
+    0 22px 60px rgba(0, 0, 0, 0.42);
+}
+
+[data-sc-ui='ui-customization-trust'] {
+  filter: drop-shadow(0 0 16px rgba(33, 230, 255, 0.12));
+}
+
+/* =========================================================
+ * 5. Surface-specific styling
+ * ======================================================= */
+
+:root[data-sc-surface='auth'] body {
+  background:
+    radial-gradient(circle at 18% 20%, rgba(33, 230, 255, 0.2), transparent 28%),
+    radial-gradient(circle at 82% 76%, rgba(255, 63, 210, 0.17), transparent 30%),
+    linear-gradient(135deg, var(--sc-bg-page), color-mix(in srgb, var(--sc-bg-page) 82%, #14091f 18%));
+}
+
+:root[data-sc-surface='lobby'] body,
+:root[data-sc-surface='world-detail'] body {
+  background:
+    radial-gradient(circle at 50% -10%, rgba(33, 230, 255, 0.11), transparent 38%),
+    var(--sc-bg-page);
+}
+
+:root[data-sc-surface='chat'] [data-sc-ui='message-list'] {
+  border-image: linear-gradient(180deg, transparent, rgba(33, 230, 255, 0.2), transparent) 1;
+}
+
+:root[data-sc-surface='split'] {
+  --sc-border-strong: color-mix(in srgb, var(--primary-color) 42%, transparent);
+}
+
+:root[data-sc-surface='embed'] body,
+:root[data-sc-surface='observer'] body {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(33, 230, 255, 0.07), transparent 34%),
+    var(--sc-bg-page);
+}
+
+:root[data-sc-surface='theater'] body {
+  background:
+    radial-gradient(circle at 50% 30%, rgba(255, 63, 210, 0.07), transparent 38%),
+    #03050a;
+}
+
+:root[data-sc-surface='invite'] body {
+  background:
+    radial-gradient(circle at 50% 24%, rgba(183, 255, 60, 0.08), transparent 28%),
+    var(--sc-bg-page);
+}
+
+:root[data-sc-surface='log-layout'] body,
+:root[data-sc-surface='log-public'] body {
+  --sc-bg-surface: color-mix(in srgb, var(--sc-bg-elevated) 82%, var(--sc-bg-page));
+}
+
+:root[data-sc-surface='status'] body {
+  background:
+    linear-gradient(180deg, rgba(33, 230, 255, 0.04), transparent 26%),
+    var(--sc-bg-page);
+}
+
+/* =========================================================
+ * 6. Generic interactive states
+ * ======================================================= */
+
+:root[data-sc-surface] :focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary-color) 82%, white 18%);
+  outline-offset: 2px;
+}
+
+:root[data-sc-surface] ::selection {
+  background: rgba(255, 63, 210, 0.28);
+  color: var(--sc-text-primary);
+}
+
+:root[data-sc-surface] a {
+  color: var(--primary-color);
+}
+
+:root[data-sc-surface] a:hover {
+  color: var(--primary-color-hover);
+}
+
+/* =========================================================
+ * 7. Naive UI integration
+ * Compatibility-sensitive: .n-* is not a SealChat stable hook.
+ * ======================================================= */
+
+:root[data-sc-surface] .n-card {
+  --n-color: color-mix(in srgb, var(--sc-bg-elevated) 94%, transparent) !important;
+  --n-text-color: var(--sc-text-primary) !important;
+  --n-title-text-color: var(--sc-text-primary) !important;
+  --n-border-color: var(--sc-border-mute) !important;
+  border-color: var(--sc-border-mute) !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+}
+
+:root[data-sc-surface] .n-button {
+  --n-text-color: var(--sc-text-primary) !important;
+  --n-text-color-hover: var(--sc-text-primary) !important;
+  --n-border: 1px solid var(--sc-border-mute) !important;
+  --n-border-hover: 1px solid var(--sc-border-strong) !important;
+  --n-color-hover: var(--sc-bg-hover) !important;
+  --n-ripple-color: var(--primary-color) !important;
+}
+
+:root[data-sc-surface] .n-button--primary-type {
+  --n-color: color-mix(in srgb, var(--primary-color) 22%, var(--sc-bg-elevated)) !important;
+  --n-color-hover: color-mix(in srgb, var(--primary-color-hover) 24%, var(--sc-bg-elevated)) !important;
+  --n-border: 1px solid color-mix(in srgb, var(--primary-color) 55%, transparent) !important;
+  --n-border-hover: 1px solid color-mix(in srgb, var(--primary-color-hover) 60%, transparent) !important;
+  --n-text-color: var(--sc-text-primary) !important;
+}
+
+:root[data-sc-surface] .n-input,
+:root[data-sc-surface] .n-input-number,
+:root[data-sc-surface] .n-base-selection {
+  --n-color: var(--sc-bg-input) !important;
+  --n-color-focus: var(--sc-bg-input) !important;
+  --n-text-color: var(--sc-text-primary) !important;
+  --n-placeholder-color: var(--sc-text-secondary) !important;
+  --n-border: 1px solid var(--sc-border-mute) !important;
+  --n-border-hover: 1px solid var(--sc-border-strong) !important;
+  --n-border-focus: 1px solid var(--primary-color) !important;
+  --n-box-shadow-focus: 0 0 0 2px color-mix(in srgb, var(--primary-color) 13%, transparent) !important;
+}
+
+:root[data-sc-surface] .n-tag {
+  --n-color: var(--sc-chip-bg) !important;
+  --n-text-color: var(--sc-text-primary) !important;
+  --n-border: 1px solid var(--sc-border-mute) !important;
+}
+
+:root[data-sc-surface] .n-tabs--segment-type .n-tabs-rail {
+  background: color-mix(in srgb, var(--sc-bg-surface) 90%, transparent) !important;
+  border: 1px solid var(--sc-border-mute);
+}
+
+:root[data-sc-surface] .n-tabs--segment-type .n-tabs-capsule {
+  background: linear-gradient(90deg, rgba(33, 230, 255, 0.11), rgba(255, 63, 210, 0.08)) !important;
+  box-shadow: inset 0 0 0 1px var(--sc-border-mute);
+}
+
+:root[data-sc-surface] .n-modal,
+:root[data-sc-surface] .n-dialog,
+:root[data-sc-surface] .n-drawer-content,
+:root[data-sc-surface] .n-popover,
+:root[data-sc-surface] .n-dropdown-menu,
+:root[data-sc-surface] .n-base-select-menu,
+:root[data-sc-surface] .n-date-panel,
+:root[data-sc-surface] .n-time-picker-panel,
+:root[data-sc-surface] .n-color-picker-panel {
+  --n-color: var(--sc-bg-elevated) !important;
+  --n-text-color: var(--sc-text-primary) !important;
+  color: var(--sc-text-primary) !important;
+  background-color: var(--sc-bg-elevated) !important;
+  border-color: var(--sc-border-mute) !important;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+}
+
+:root[data-sc-surface] .n-base-select-option {
+  --n-option-text-color: var(--sc-text-primary) !important;
+  --n-option-text-color-active: var(--sc-text-primary) !important;
+  --n-option-color-pending: var(--sc-bg-hover) !important;
+  --n-option-color-active: var(--sc-bg-active) !important;
+}
+
+/* =========================================================
+ * 8. Chat internals
+ * Compatibility-sensitive: component class names may change.
+ * ======================================================= */
+
+:root[data-sc-surface='chat'] .chat-input-actions,
+:root[data-sc-surface='chat'] .input-floating-toolbar {
+  color: var(--sc-text-primary);
+}
+
+:root[data-sc-surface='chat'] .message-action-bar__btn {
+  color: var(--sc-text-secondary) !important;
+  background: color-mix(in srgb, var(--sc-bg-elevated) 90%, transparent) !important;
+  border: 1px solid var(--sc-border-mute);
+}
+
+:root[data-sc-surface='chat'] .message-action-bar__btn:hover {
+  color: var(--primary-color) !important;
+  background: var(--sc-bg-hover) !important;
+  border-color: var(--sc-border-strong);
+}
+
+:root[data-sc-surface='chat'] .typing-preview-bubble,
+:root[data-sc-surface='chat'] .editing-preview__bubble {
+  border: 1px solid var(--sc-border-mute);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+}
+
+:root[data-sc-surface='chat'] .history-entry {
+  border-color: var(--sc-border-mute) !important;
+  background: var(--sc-bg-elevated) !important;
+}
+
+:root[data-sc-surface='chat'] .history-entry:hover {
+  border-color: var(--primary-color) !important;
+  background: var(--sc-bg-hover) !important;
+}
+
+:root[data-sc-surface='chat'] .keyword-highlight:not(.keyword-highlight--underline) {
+  background: var(--custom-keyword-bg) !important;
+  border-bottom-color: var(--custom-keyword-border) !important;
+}
+
+:root[data-sc-surface='chat'] .keyword-highlight.keyword-highlight--underline {
+  border-bottom-color: var(--custom-keyword-border) !important;
+}
+
+:root[data-sc-surface='chat'] code:not(pre code) {
+  background: var(--chat-inline-code-bg);
+  color: var(--chat-inline-code-fg);
+  border: 1px solid var(--chat-inline-code-border);
+  border-radius: 4px;
+}
+
+/* =========================================================
+ * 9. World console / admin / profile
+ * ======================================================= */
+
+[data-sc-ui='world-console'] .n-card,
+[data-sc-ui='admin-settings'] .n-card,
+[data-sc-ui='user-profile'] .n-card {
+  background:
+    linear-gradient(145deg, rgba(33, 230, 255, 0.025), rgba(255, 63, 210, 0.02)),
+    var(--sc-bg-elevated) !important;
+}
+
+[data-sc-ui='world-console'] h1,
+[data-sc-ui='world-console'] h2,
+[data-sc-ui='world-console'] h3,
+[data-sc-ui='admin-settings'] h1,
+[data-sc-ui='admin-settings'] h2,
+[data-sc-ui='user-profile'] h1,
+[data-sc-ui='user-profile'] h2 {
+  text-shadow: 0 0 18px color-mix(in srgb, var(--primary-color) 18%, transparent);
+}
+
+/* =========================================================
+ * 10. Public surfaces
+ * ======================================================= */
+
+:root[data-sc-surface='observer'] [data-sc-ui='header'],
+:root[data-sc-surface='embed'] [data-sc-ui='header'] {
+  box-shadow: 0 1px 0 rgba(33, 230, 255, 0.08);
+}
+
+:root[data-sc-surface='observer'] [data-sc-ui='message'],
+:root[data-sc-surface='embed'] [data-sc-ui='message'] {
+  background: color-mix(in srgb, var(--sc-bg-surface) 28%, transparent);
+}
+
+:root[data-sc-surface='log-public'] {
+  --chat-message-shadow: none;
+}
+
+:root[data-sc-surface='log-public'] body {
+  background:
+    linear-gradient(180deg, rgba(33, 230, 255, 0.035), transparent 20%),
+    var(--sc-bg-page);
+}
+
+/* =========================================================
+ * 11. Scrollbars
+ * ======================================================= */
+
+:root[data-sc-surface] * {
+  scrollbar-color: var(--sc-scrollbar-thumb) transparent;
+}
+
+:root[data-sc-surface] *::-webkit-scrollbar-thumb {
+  background:
+    linear-gradient(180deg, var(--primary-color), var(--primary-color-hover));
+  border-radius: 999px;
+}
+
+:root[data-sc-surface] *::-webkit-scrollbar-thumb:hover {
+  background:
+    linear-gradient(180deg, var(--primary-color-hover), var(--primary-color));
+}
+
+/* =========================================================
+ * 12. Compact layout
+ * ======================================================= */
+
+:root[data-sc-layout='compact'] [data-sc-ui='message'] {
+  border-radius: 5px;
+}
+
+:root[data-sc-layout='compact'] [data-sc-ui='composer'] {
+  box-shadow: 0 -8px 18px rgba(0, 0, 0, 0.08);
+}
+
+/* =========================================================
+ * 13. Narrow screens
+ * ======================================================= */
+
+@media (max-width: 640px) {
+  :root[data-sc-surface] body::before {
+    background-size: 24px 24px;
+    opacity: 0.72;
+  }
+
+  [data-sc-ui='header'] {
+    backdrop-filter: blur(10px) saturate(130%);
+  }
+
+  [data-sc-ui='sidebar'] {
+    box-shadow: none;
+  }
+
+  [data-sc-ui='message'] {
+    border-radius: 6px;
+  }
+
+  [data-sc-ui='composer'] {
+    backdrop-filter: blur(10px) saturate(125%);
+  }
+
+  :root[data-sc-surface] .n-modal,
+  :root[data-sc-surface] .n-dialog,
+  :root[data-sc-surface] .n-drawer-content {
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.34);
+  }
+}
+
+/* =========================================================
+ * 14. Reduced motion
+ * ======================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-sc-surface] *,
+  :root[data-sc-surface] *::before,
+  :root[data-sc-surface] *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
