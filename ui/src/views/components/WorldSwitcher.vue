@@ -21,6 +21,7 @@ const botList = ref<any[]>([]);
 const showCreate = ref(false);
 const creating = ref(false);
 const coverUploading = ref(false);
+const coverEditing = ref(false);
 const worldJumpId = ref('');
 
 const createInitialWorldForm = () => ({
@@ -89,7 +90,7 @@ const handleSwitch = async (worldId: string) => {
 };
 
 const handleWorldCreate = async () => {
-  if (creating.value || coverUploading.value) return;
+  if (creating.value || coverUploading.value || coverEditing.value) return;
   if (!worldForm.value.name.trim()) {
     message.error('请输入世界名称');
     return;
@@ -139,7 +140,7 @@ const getDescriptionCountLabel = (value?: string) => {
 </script>
 
 <template>
-  <n-drawer v-model:show="drawerVisible" width="60%">
+  <n-drawer v-model:show="drawerVisible" width="60%" :trap-focus="false" :close-on-esc="!coverEditing">
     <n-drawer-content title="世界大厅" closable>
       <div class="space-y-3">
         <div class="flex gap-2">
@@ -169,7 +170,8 @@ const getDescriptionCountLabel = (value?: string) => {
     </n-drawer-content>
   </n-drawer>
 
-  <n-modal v-model:show="showCreate" preset="dialog" title="新建世界" style="max-width:420px">
+  <!-- Keep the focus wrapper stable while the teleported image editor is open. -->
+  <n-modal v-model:show="showCreate" preset="dialog" title="新建世界" style="max-width:420px" :trap-focus="false" :close-on-esc="!coverEditing">
     <n-form label-width="72">
       <n-form-item label="名称">
         <n-input v-model:value="worldForm.name" placeholder="输入世界名称" />
@@ -200,6 +202,7 @@ const getDescriptionCountLabel = (value?: string) => {
           v-if="showCreate"
           v-model="worldForm.coverAttachmentId"
           v-model:uploading="coverUploading"
+          v-model:editing="coverEditing"
           :disabled="creating"
         />
       </n-form-item>
@@ -225,7 +228,7 @@ const getDescriptionCountLabel = (value?: string) => {
         >
           取消
         </n-button>
-        <n-button type="primary" :loading="creating" :disabled="coverUploading" @click="handleWorldCreate">创建</n-button>
+        <n-button type="primary" :loading="creating" :disabled="coverUploading || coverEditing" @click="handleWorldCreate">创建</n-button>
       </n-space>
     </template>
   </n-modal>

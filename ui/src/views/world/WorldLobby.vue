@@ -88,6 +88,7 @@ const searchKeyword = ref('');
 const createVisible = ref(false);
 const creating = ref(false);
 const coverUploading = ref(false);
+const coverEditing = ref(false);
 const archivePickerVisible = ref(false);
 const archivePickerLoading = ref(false);
 const archiveCandidateItems = ref<any[]>([]);
@@ -915,7 +916,7 @@ const resetCreateForm = () => {
 };
 
 const handleCreateWorld = async () => {
-  if (creating.value || coverUploading.value) return;
+  if (creating.value || coverUploading.value || coverEditing.value) return;
   if (!createForm.value.name.trim()) {
     message.error('请输入世界名称');
     return;
@@ -1519,7 +1520,8 @@ const handleArchivePageSizeChange = (pageSize: number) => {
       </template>
     </n-modal>
 
-    <n-modal v-model:show="createVisible" preset="dialog" title="创建世界" style="max-width: 420px">
+    <!-- Keep the focus wrapper stable while the teleported image editor is open. -->
+    <n-modal v-model:show="createVisible" preset="dialog" title="创建世界" style="max-width: 420px" :trap-focus="false" :close-on-esc="!coverEditing">
       <n-form label-width="72">
         <n-form-item label="名称">
           <n-input v-model:value="createForm.name" placeholder="输入世界名称" />
@@ -1550,6 +1552,7 @@ const handleArchivePageSizeChange = (pageSize: number) => {
             v-if="createVisible"
             v-model="createForm.coverAttachmentId"
             v-model:uploading="coverUploading"
+            v-model:editing="coverEditing"
             :disabled="creating"
           />
         </n-form-item>
@@ -1575,7 +1578,7 @@ const handleArchivePageSizeChange = (pageSize: number) => {
           >
             取消
           </n-button>
-          <n-button type="primary" :loading="creating" :disabled="coverUploading" @click="handleCreateWorld">创建</n-button>
+          <n-button type="primary" :loading="creating" :disabled="coverUploading || coverEditing" @click="handleCreateWorld">创建</n-button>
         </n-space>
       </template>
     </n-modal>
