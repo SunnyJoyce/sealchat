@@ -936,6 +936,10 @@ const handleOpenUserProfile = (payload?: { openAISettings?: boolean }) => {
   userProfileShow.value = true;
 };
 
+const handleOpenInputStats = () => {
+  void toggleInputStats();
+};
+
 const handleOpenAppNotificationSettings = () => {
   openAppNotificationSettings();
 };
@@ -943,6 +947,7 @@ const handleOpenAppNotificationSettings = () => {
 onMounted(() => {
   chatEvent.on('action-ribbon-state', handleRibbonStateUpdate);
   chatEvent.on('open-user-profile', handleOpenUserProfile);
+  chatEvent.on('open-input-stats', handleOpenInputStats);
   chatEvent.on('open-app-notification-settings', handleOpenAppNotificationSettings);
   chatEvent.emit('action-ribbon-state-request');
 });
@@ -951,6 +956,7 @@ onBeforeUnmount(() => {
   stopPresencePopoverRefreshLoop();
   chatEvent.off('action-ribbon-state', handleRibbonStateUpdate);
   chatEvent.off('open-user-profile', handleOpenUserProfile);
+  chatEvent.off('open-input-stats', handleOpenInputStats);
   chatEvent.off('open-app-notification-settings', handleOpenAppNotificationSettings);
   if (notifTimer.value) {
     window.clearInterval(notifTimer.value);

@@ -4,7 +4,10 @@ import { NIcon, useMessage } from 'naive-ui'
 import { calculateVisibleActionCount } from './chatActionRibbonLayout'
 import {
   Archive as ArchiveIcon,
+  Book as LogLayoutIcon,
+  Code as CustomUiIcon,
   Download as DownloadIcon,
+  Eye as ObserverLinkIcon,
   DotsVertical as MoreIcon,
   Heartbeat as BridgeStatusIcon,
   Link as LinkIcon,
@@ -24,8 +27,7 @@ import {
   LayoutBoard as ClueBoardIcon,
   Bolt as ShortcutCommandIcon,
 } from '@vicons/tabler'
-import { DocumentTextOutline } from '@vicons/ionicons5'
-import { MailOutline } from '@vicons/ionicons5'
+import { DocumentTextOutline, MailOutline, NotificationsOutline } from '@vicons/ionicons5'
 import ObserverFilterModal from '../../components/ObserverFilterModal.vue'
 import { useSpeechStore } from '@/features/tts/store'
 import TTSWorldActivationDialog from '@/features/tts/TTSWorldActivationDialog.vue'
@@ -86,6 +88,8 @@ interface Props {
   characterCardEnabled?: boolean
   characterCardActive?: boolean
   characterRemarkActive?: boolean
+  worldManagementActive?: boolean
+  accountUtilityActive?: boolean
 }
 
 interface Emits {
@@ -113,6 +117,11 @@ interface Emits {
   (e: 'open-webhook'): void
   (e: 'open-bridge-status'): void
   (e: 'open-email-notification'): void
+  (e: 'open-log-layout-management'): void
+  (e: 'open-observer-link-management'): void
+  (e: 'open-custom-ui-management'): void
+  (e: 'open-input-stats'): void
+  (e: 'open-app-notification-settings'): void
   (e: 'open-character-card'): void
   (e: 'open-character-remark'): void
   (e: 'clear-filters'): void
@@ -242,15 +251,19 @@ const allActionButtons = computed<ActionButton[]>(() => {
     buttons.push({ key: 'webhook', label: 'Webhook', icon: LinkIcon, emitEvent: 'open-webhook', activeKey: 'webhookActive' })
   }
 
-  buttons.push({ key: 'bridge-status', label: '桥接状态', icon: BridgeStatusIcon, emitEvent: 'open-bridge-status', activeKey: 'bridgeStatusActive' })
+  buttons.push({ key: 'glass-background', label: '玻璃背景', icon: Palette, emitEvent: 'open-glass-background', activeKey: 'glassBackgroundActive' })
+  buttons.push({ key: 'shortcut-command', label: '快捷命令', icon: ShortcutCommandIcon, emitEvent: 'open-shortcut-command', activeKey: 'shortcutCommandActive' })
+  buttons.push({ key: 'log-layout-management', label: 'LOG 排版', icon: LogLayoutIcon, emitEvent: 'open-log-layout-management', activeKey: 'worldManagementActive' })
+  buttons.push({ key: 'observer-link-management', label: '旁观链接', icon: ObserverLinkIcon, emitEvent: 'open-observer-link-management', activeKey: 'worldManagementActive' })
+  buttons.push({ key: 'custom-ui-management', label: '定制界面', icon: CustomUiIcon, emitEvent: 'open-custom-ui-management', activeKey: 'worldManagementActive' })
+  buttons.push({ key: 'input-stats', label: '输入统计', icon: DocumentTextOutline, emitEvent: 'open-input-stats', activeKey: 'accountUtilityActive' })
+  buttons.push({ key: 'app-notification-settings', label: 'APP 推送', icon: NotificationsOutline, emitEvent: 'open-app-notification-settings', activeKey: 'accountUtilityActive' })
 
-  // 未读提醒入口（复用原邮件提醒位置）
+  // 诊断与提醒入口固定收在最后。
+  buttons.push({ key: 'bridge-status', label: '桥接状态', icon: BridgeStatusIcon, emitEvent: 'open-bridge-status', activeKey: 'bridgeStatusActive' })
   if (props.emailNotificationEnabled !== false) {
     buttons.push({ key: 'email-notification', label: '未读提醒', icon: MailOutline, emitEvent: 'open-email-notification', activeKey: 'emailNotificationActive' })
   }
-  
-  buttons.push({ key: 'glass-background', label: '玻璃背景', icon: Palette, emitEvent: 'open-glass-background', activeKey: 'glassBackgroundActive' })
-  buttons.push({ key: 'shortcut-command', label: '快捷命令', icon: ShortcutCommandIcon, emitEvent: 'open-shortcut-command', activeKey: 'shortcutCommandActive' })
   return buttons
 })
 

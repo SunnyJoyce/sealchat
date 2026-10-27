@@ -313,6 +313,14 @@ const speechStore = useSpeechStore();
 iFormStore.bootstrap();
 const router = useRouter();
 const route = useRoute();
+const openWorldManagementTarget = (target: 'log' | 'observer' | 'ui') => {
+  if (!chat.currentWorldId) return;
+  router.push({
+    name: 'world-detail',
+    params: { worldId: chat.currentWorldId },
+    query: { open: target },
+  });
+};
 const pushStore = usePushNotificationStore();
 watch(
   () => [display.settings.favoriteChannelBarEnabled, display.settings.favoriteChannelIdsByWorld] as const,
@@ -16321,6 +16329,11 @@ onBeforeUnmount(() => {
           @open-webhook="webhookDrawerVisible = true"
           @open-bridge-status="bridgeStatusDrawerVisible = true"
           @open-email-notification="emailNotificationDrawerVisible = true"
+          @open-log-layout-management="openWorldManagementTarget('log')"
+          @open-observer-link-management="openWorldManagementTarget('observer')"
+          @open-custom-ui-management="openWorldManagementTarget('ui')"
+          @open-input-stats="chatEvent.emit('open-input-stats')"
+          @open-app-notification-settings="chatEvent.emit('open-app-notification-settings')"
           @open-character-card="openCharacterCardPanel"
           @clear-filters="chat.setFilterState({ icFilter: 'all', showArchived: false, roleIds: [], whisperOnly: false, fromTime: null, toTime: null })"
         />

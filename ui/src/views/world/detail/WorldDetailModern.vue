@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useDialog, useMessage } from 'naive-ui';
 import { Bell, Book, Code, DoorExit, Eye, History, Robot, Settings, Share, ShieldCheck, Users } from '@vicons/tabler';
 import { useChatStore } from '@/stores/chat';
@@ -17,6 +17,7 @@ const props = defineProps<{ worldId: string }>();
 const emit = defineEmits<{ (e: 'switch-variant'): void }>();
 
 const chat = useChatStore();
+const route = useRoute();
 const router = useRouter();
 const message = useMessage();
 const dialog = useDialog();
@@ -176,6 +177,18 @@ const openAccessDrawer = (kind: AccessDrawerKind) => {
   accessDrawerKind.value = kind;
   activeSection.value = 'access';
 };
+
+const applyRouteManagementTarget = () => {
+  if (!canManageWorld.value) return;
+  const target = typeof route.query.open === 'string' ? route.query.open : '';
+  if (target === 'log' || target === 'observer') {
+    openAccessDrawer(target);
+  } else if (target === 'ui') {
+    selectSection('ui');
+  }
+};
+
+watch([() => route.query.open, canManageWorld], applyRouteManagementTarget, { immediate: true });
 
 // Settings may rename the world or change its cover; refresh on close unless it was deleted.
 let deletedWorldId = '';
