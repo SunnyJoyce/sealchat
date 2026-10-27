@@ -43,7 +43,8 @@ const isWorld = computed(() => props.scope.type === 'world')
 const scopeKey = computed(() => props.scope.type === 'world' ? `world:${props.scope.worldId}` : 'platform')
 const worldJSAllowed = computed(() => !isWorld.value || !!policy.value?.allowWorldJs)
 const worldCSSAllowed = computed(() => !isWorld.value || policy.value?.allowWorldCss !== false)
-const full = computed(() => packages.value.length >= MAX_PACKAGES)
+const userPackageCount = computed(() => packages.value.filter(pkg => !pkg.readonly).length)
+const full = computed(() => userPackageCount.value >= MAX_PACKAGES)
 
 const errorText = (error: any, fallback: string) => error?.response?.data?.message || error?.message || fallback
 
@@ -84,11 +85,15 @@ const toggleSafeSession = (disabled: boolean) => {
 }
 
 const openCreate = () => {
-  if (full.value) return message.warning(`每个作用域最多 ${MAX_PACKAGES} 个包`)
+  if (full.value) return message.warning(`每个作用域最多 ${MAX_PACKAGES} 个自定义包`)
   editing.value = null
   editorShow.value = true
 }
 const openEdit = (pkg: UICustomizationPackage) => {
+  if (pkg.readonly) {
+    message.info('内置主题由服务器资源维护；如需修改，请先复制为自定义包')
+    return
+  }
   editing.value = pkg
   editorShow.value = true
 }
@@ -150,7 +155,7 @@ const move = async (index: number, delta: number) => {
 }
 
 const duplicate = async (pkg: UICustomizationPackage) => {
-  if (full.value) return message.warning(`每个作用域最多 ${MAX_PACKAGES} 个包`)
+  if (full.value) return message.warning(`每个作用域最多 ${MAX_PACKAGES} 个自定义包`)
   // A closed world policy rejects new world JS, so the copy keeps CSS only.
   const dropJS = isWorld.value && !worldJSAllowed.value && !!pkg.js
   busyId.value = pkg.id
@@ -258,7 +263,7 @@ const sizeLabel = (text: string) => {
       <n-button secondary size="small" :disabled="!packages.length" @click="exportAll">
         <template #icon><n-icon><Download /></n-icon></template>导出全部
       </n-button>
-      <span class="sc-uic-manager__count">{{ packages.length }}/{{ MAX_PACKAGES }}</span>
+      <span class="sc-uic-manager__count">{{ userPackageCount }}/{{ MAX_PACKAGES }} 自定义包</span>
     </div>
 
     <div class="sc-uic-manager__notes">
@@ -304,6 +309,8 @@ const sizeLabel = (text: string) => {
         <div class="sc-uic-item__main" @click="openEdit(pkg)">
           <div class="sc-uic-item__title">
             <span class="sc-uic-item__name">{{ pkg.name }}</span>
+            <n-tag v-if="pkg.origin === 'builtin'" size="tiny" :bordered="false" type="info">内置 · {{ pkg.ref }}
+            </n-tag>
             <span class="sc-uic-badge" :class="pkg.css ? 'is-css' : 'is-empty'">CSS{{ pkg.css ? ` · ${sizeLabel(pkg.css)}` : '' }}</span>
             <span
               v-if="pkg.js"
@@ -331,8 +338,8 @@ const sizeLabel = (text: string) => {
             :aria-label="pkg.enabled ? '停用' : '启用'"
             @update:value="(v: boolean) => toggleEnabled(pkg, v)"
           />
-          <n-button size="small" secondary @click="openEdit(pkg)">编辑</n-button>
-          <n-dropdown trigger="click" :options="moreOptions" @select="(key: string) => handleMore(key, pkg)">
+          <n-button v-if="!pkg.readonly" size="small" secondary @click="openEdit(pkg)">编辑</n-button>
+          <n-dropdown trigger="click" :options="pkg.readonly ? [{ label: '复制', key: 'duplicate' }, { label: '导出', key: 'export' }] : moreOptions" @select="(key: string) => handleMore(key, pkg)">
             <n-button size="small" quaternary aria-label="更多操作">
               <template #icon><n-icon><DotsVertical /></n-icon></template>
             </n-button>

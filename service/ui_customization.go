@@ -56,6 +56,7 @@ var (
 	ErrUICustomizationDenied   = errors.New("UI customization permission denied")
 	ErrUICustomizationNotFound = errors.New("UI customization not found")
 	ErrUICustomizationLimit    = errors.New("UI customization package limit reached")
+	ErrUICustomizationBuiltin  = errors.New("builtin UI customization is read-only")
 	// SealChat runs a single server process. This serializes count/append and
 	// reorder operations in that process; it is not a distributed quota lock.
 	uiCustomizationMutationMu sync.Mutex
@@ -77,6 +78,11 @@ type UICustomizationPatch struct {
 
 type UICustomizationPackage struct {
 	ID          string      `json:"id"`
+	Ref         string      `json:"ref"`
+	Origin      string      `json:"origin"`
+	BuiltinKey  string      `json:"builtinKey,omitempty"`
+	Version     string      `json:"version,omitempty"`
+	Readonly    bool        `json:"readonly"`
 	ScopeType   string      `json:"scopeType"`
 	ScopeID     string      `json:"scopeId"`
 	Name        string      `json:"name"`
@@ -95,12 +101,25 @@ type UICustomizationPackage struct {
 
 func uiCustomizationView(m *model.UICustomizationPackageModel) (*UICustomizationPackage, error) {
 	var surfaces []UISurface
-	if err := json.Unmarshal([]byte(m.SurfacesJSON), &surfaces); err != nil {
+	name, description, css, js, version := m.Name, m.Description, m.CSS, m.JS, m.BuiltinVersion
+	if m.BuiltinKey != "" {
+		item, err := builtinUICustomizationForKey(m.BuiltinKey)
+		if err != nil {
+			return nil, err
+		}
+		name, description, css, js, version = item.Name, item.Description, item.CSS, item.JS, item.Version
+		surfaces = append([]UISurface(nil), item.Targets...)
+	} else if err := json.Unmarshal([]byte(m.SurfacesJSON), &surfaces); err != nil {
 		return nil, err
 	}
-	return &UICustomizationPackage{ID: m.ID, ScopeType: m.ScopeType, ScopeID: m.ScopeID,
-		Name: m.Name, Description: m.Description, Enabled: m.Enabled, SortOrder: m.SortOrder,
-		Surfaces: surfaces, CSS: m.CSS, JS: m.JS, JSHash: UICustomizationJSHash(m.JS), CreatedBy: m.CreatedBy, UpdatedBy: m.UpdatedBy,
+	origin, ref := "user", m.ID
+	if m.BuiltinKey != "" {
+		origin, ref = "builtin", BuiltinUICustomizationRefPrefix+m.BuiltinKey
+	}
+	return &UICustomizationPackage{ID: m.ID, Ref: ref, Origin: origin, BuiltinKey: m.BuiltinKey,
+		Version: version, Readonly: m.BuiltinKey != "", ScopeType: m.ScopeType, ScopeID: m.ScopeID,
+		Name: name, Description: description, Enabled: m.Enabled, SortOrder: m.SortOrder,
+		Surfaces: surfaces, CSS: css, JS: js, JSHash: UICustomizationJSHash(js), CreatedBy: m.CreatedBy, UpdatedBy: m.UpdatedBy,
 		CreatedAt: m.CreatedAt.UnixMilli(), UpdatedAt: m.UpdatedAt.UnixMilli()}, nil
 }
 
@@ -157,6 +176,16 @@ func uiCustomizationRows(db *gorm.DB, scope UICustomizationScope) ([]model.UICus
 	rows := []model.UICustomizationPackageModel{}
 	err := uiCustomizationQuery(db, scope).Order("sort_order ASC, created_at ASC, id ASC").Find(&rows).Error
 	return rows, err
+}
+
+func uiCustomizationUserPackageCount(rows []model.UICustomizationPackageModel) int {
+	count := 0
+	for _, row := range rows {
+		if row.BuiltinKey == "" {
+			count++
+		}
+	}
+	return count
 }
 
 func ListUICustomizations(scope UICustomizationScope, actorID string) ([]*UICustomizationPackage, error) {
@@ -272,7 +301,7 @@ func createUICustomizationModels(scope UICustomizationScope, models []*model.UIC
 		if err != nil {
 			return err
 		}
-		if len(rows)+len(models) > UICustomizationMaxPackages {
+		if uiCustomizationUserPackageCount(rows)+len(models) > UICustomizationMaxPackages {
 			return ErrUICustomizationLimit
 		}
 		next := 0
@@ -316,6 +345,9 @@ func UpdateUICustomization(scope UICustomizationScope, actorID, id string, patch
 	if err != nil {
 		return nil, err
 	}
+	if m.BuiltinKey != "" && (patch.Name != nil || patch.Description != nil || patch.Surfaces != nil || patch.CSS != nil || patch.JS != nil) {
+		return nil, ErrUICustomizationBuiltin
+	}
 	if err := applyUICustomizationPatch(&m, patch, policy); err != nil {
 		return nil, err
 	}
@@ -340,6 +372,12 @@ func DeleteUICustomization(scope UICustomizationScope, actorID, id string) error
 	}
 	uiCustomizationMutationMu.Lock()
 	defer uiCustomizationMutationMu.Unlock()
+	var builtin model.UICustomizationPackageModel
+	if err := uiCustomizationQuery(model.GetDB(), scope).Where("id = ?", id).Take(&builtin).Error; err == nil && builtin.BuiltinKey != "" {
+		// Builtins are references to shipped resources. They can be disabled, but
+		// cannot be deleted from the platform catalog.
+		return ErrUICustomizationBuiltin
+	}
 	result := uiCustomizationQuery(model.GetDB(), scope).Where("id = ?", id).Delete(&model.UICustomizationPackageModel{})
 	if result.Error != nil {
 		return result.Error
@@ -356,7 +394,9 @@ func ReorderUICustomizations(scope UICustomizationScope, actorID string, ids []s
 	if err := uiCustomizationManage(scope, actorID); err != nil {
 		return err
 	}
-	if len(ids) > UICustomizationMaxPackages {
+	// Builtin references are outside the user-package quota but participate in
+	// the exact permutation sent by the manager.
+	if len(ids) > UICustomizationMaxPackages+len(builtinUICustomizationRegistrations) {
 		return ErrUICustomizationInvalid
 	}
 	uiCustomizationMutationMu.Lock()

@@ -18,6 +18,9 @@ type UICustomizationContext struct {
 
 type UICustomizationRuntimePackage struct {
 	ID        string `json:"id"`
+	Ref       string `json:"ref"`
+	Origin    string `json:"origin"`
+	Version   string `json:"version,omitempty"`
 	ScopeType string `json:"scopeType"`
 	Name      string `json:"name"`
 	SortOrder int    `json:"sortOrder"`
@@ -172,6 +175,7 @@ func ResolveUICustomizations(ctx UICustomizationContext, actorID string, policy 
 	if worldID != "" && policy.AllowWorldCSS && (!public || policy.AllowPublicWorldCSS) {
 		scopes = append(scopes, UICustomizationScope{Type: "world", ID: worldID})
 	}
+	seenBuiltinRefs := map[string]bool{}
 	for _, scope := range scopes {
 		var rows []model.UICustomizationPackageModel
 		if err := uiCustomizationQuery(model.GetDB(), scope).Where("enabled = ?", true).
@@ -180,21 +184,45 @@ func ResolveUICustomizations(ctx UICustomizationContext, actorID string, policy 
 		}
 		for _, m := range rows {
 			var surfaces []UISurface
-			if err := json.Unmarshal([]byte(m.SurfacesJSON), &surfaces); err != nil {
+			css, js := m.CSS, m.JS
+			version := m.BuiltinVersion
+			builtinRef := ""
+			if m.BuiltinKey != "" {
+				builtin, err := builtinUICustomizationForKey(m.BuiltinKey)
+				if err != nil {
+					return nil, err
+				}
+				surfaces = builtin.Targets
+				css, js = builtin.CSS, builtin.JS
+				version = builtin.Version
+				builtinRef = builtin.Ref
+			} else if err := json.Unmarshal([]byte(m.SurfacesJSON), &surfaces); err != nil {
 				return nil, err
 			}
 			if !uiSurfaceTargeted(surfaces, ctx.Surface) {
 				continue
 			}
+			if builtinRef != "" && seenBuiltinRefs[builtinRef] {
+				continue
+			}
 			item := UICustomizationRuntimePackage{
-				ID: m.ID, ScopeType: m.ScopeType, Name: m.Name, SortOrder: m.SortOrder, CreatedAt: m.CreatedAt.UnixMilli(), CSS: m.CSS,
+				ID: m.ID, Ref: m.ID, Origin: "user", ScopeType: m.ScopeType, Name: m.Name,
+				SortOrder: m.SortOrder, CreatedAt: m.CreatedAt.UnixMilli(), CSS: css,
+			}
+			if m.BuiltinKey != "" {
+				item.Ref = BuiltinUICustomizationRefPrefix + m.BuiltinKey
+				item.Origin = "builtin"
+				item.Version = version
 			}
 			if scope.Type == "platform" || worldJS {
-				item.JS = m.JS
-				item.JSHash = UICustomizationJSHash(m.JS)
-				item.RequiresTrust = scope.Type == "world" && m.JS != ""
+				item.JS = js
+				item.JSHash = UICustomizationJSHash(js)
+				item.RequiresTrust = scope.Type == "world" && js != ""
 			}
 			result.Packages = append(result.Packages, item)
+			if builtinRef != "" {
+				seenBuiltinRefs[builtinRef] = true
+			}
 		}
 	}
 	return result, nil

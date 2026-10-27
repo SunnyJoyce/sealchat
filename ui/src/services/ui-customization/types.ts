@@ -13,6 +13,11 @@ export type UICustomizationScopeType = 'platform' | 'world'
 
 export interface UICustomizationPackage {
   id: string
+  ref: string
+  origin: 'user' | 'builtin'
+  builtinKey?: string
+  version?: string
+  readonly: boolean
   scopeType: UICustomizationScopeType
   scopeId: string
   name: string
@@ -40,7 +45,7 @@ export type UICustomizationPackageInput = Partial<Pick<UICustomizationPackage, '
 // js is empty whenever the server decided the script may not run here.
 // requiresTrust marks world scripts that also need per-browser trust.
 export type RuntimePackage = Pick<UICustomizationPackage, 'id' | 'scopeType' | 'name' | 'sortOrder' | 'createdAt' | 'css'>
-  & { js?: string; jsHash?: string; requiresTrust?: boolean }
+  & { ref: string; origin: 'user' | 'builtin'; version?: string; js?: string; jsHash?: string; requiresTrust?: boolean }
 export interface UICustomizationRuntimeResult {
   surface: UIRuntimeSurface
   worldId: string

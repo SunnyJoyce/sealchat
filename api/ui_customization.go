@@ -2,12 +2,26 @@ package api
 
 import (
 	"errors"
+	"net/url"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"sealchat/service"
 	"sealchat/utils"
 )
+
+// Fiber keeps encoded route parameters escaped by default. UI customization
+// IDs may intentionally contain a stable reference such as `builtin:rlyeh-archive`,
+// so decode path parameters at the API boundary before handing them to the
+// service layer. Malformed escapes are left untouched and will resolve as a
+// normal not-found ID rather than changing the route contract.
+func uiCustomizationParam(c *fiber.Ctx, key string) string {
+	value := c.Params(key)
+	if decoded, err := url.PathUnescape(value); err == nil {
+		return decoded
+	}
+	return value
+}
 
 func bindUICustomizationRoutes(group fiber.Router) {
 	for _, prefix := range []string{"/admin/ui-customizations", "/worlds/:worldId/ui-customizations"} {
@@ -24,7 +38,7 @@ func uiCustomizationScope(c *fiber.Ctx) service.UICustomizationScope {
 	if !strings.Contains(c.Route().Path, ":worldId") {
 		return service.UICustomizationScope{Type: "platform"}
 	}
-	return service.UICustomizationScope{Type: "world", ID: strings.TrimSpace(c.Params("worldId"))}
+	return service.UICustomizationScope{Type: "world", ID: strings.TrimSpace(uiCustomizationParam(c, "worldId"))}
 }
 
 func uiCustomizationPolicy() *utils.UICustomizationPolicyConfig {
@@ -41,6 +55,8 @@ func uiCustomizationError(c *fiber.Ctx, err error) error {
 	case errors.Is(err, service.ErrUICustomizationInvalid):
 		// Validation details are user-facing Chinese text; drop the sentinel prefix.
 		status, message = fiber.StatusBadRequest, strings.ReplaceAll(err.Error(), service.ErrUICustomizationInvalid.Error()+": ", "")
+	case errors.Is(err, service.ErrUICustomizationBuiltin):
+		status, message = fiber.StatusBadRequest, "内置界面主题只能启用或停用，不能直接编辑或删除"
 	case errors.Is(err, service.ErrUICustomizationLimit):
 		status, message = fiber.StatusConflict, "同一作用域最多 50 个包"
 	case errors.Is(err, service.ErrUICustomizationDenied):
@@ -64,7 +80,12 @@ func uiCustomizationError(c *fiber.Ctx, err error) error {
 }
 
 func uiCustomizationList(c *fiber.Ctx) error {
-	items, err := service.ListUICustomizations(uiCustomizationScope(c), getCurUser(c).ID)
+	scope := uiCustomizationScope(c)
+	actorID := getCurUser(c).ID
+	if err := service.EnsureBuiltinUICustomizations(scope, actorID); err != nil {
+		return uiCustomizationError(c, err)
+	}
+	items, err := service.ListUICustomizations(scope, actorID)
 	if err != nil {
 		return uiCustomizationError(c, err)
 	}
@@ -86,7 +107,7 @@ func uiCustomizationSave(c *fiber.Ctx, create bool) error {
 	if create {
 		item, err = service.CreateUICustomization(uiCustomizationScope(c), getCurUser(c).ID, input, uiCustomizationPolicy())
 	} else {
-		item, err = service.UpdateUICustomization(uiCustomizationScope(c), getCurUser(c).ID, c.Params("id"), input, uiCustomizationPolicy())
+		item, err = service.UpdateUICustomization(uiCustomizationScope(c), getCurUser(c).ID, uiCustomizationParam(c, "id"), input, uiCustomizationPolicy())
 	}
 	if err != nil {
 		return uiCustomizationError(c, err)
@@ -98,7 +119,7 @@ func uiCustomizationSave(c *fiber.Ctx, create bool) error {
 }
 
 func uiCustomizationDelete(c *fiber.Ctx) error {
-	if err := service.DeleteUICustomization(uiCustomizationScope(c), getCurUser(c).ID, c.Params("id")); err != nil {
+	if err := service.DeleteUICustomization(uiCustomizationScope(c), getCurUser(c).ID, uiCustomizationParam(c, "id")); err != nil {
 		return uiCustomizationError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
