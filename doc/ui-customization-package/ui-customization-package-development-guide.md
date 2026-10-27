@@ -8,16 +8,17 @@ SealChat 目前有两套外观机制。传统“颜色主题”只负责一组�
 
 如果你只想修改主色、聊天气泡颜色和输入框颜色，优先使用传统颜色主题。如果你需要修改登录页、聊天主界面、世界控制台、LOG、OB、Embed 或小剧场的整体视觉，应使用 UI 自定义包。
 
-本文以 V1 运行时为准。低层接口和 JavaScript Runtime 说明见 `doc/ui-customization-css-api.md`。架构设计见 `docs/ui-customization-package-design.md`。
+本文以 V1 运行时为准。运行时能力、Surface、CSS/JavaScript 约束和包格式均以本文及当前源码为准。
 
 ## 2. 快速开始
 
-仓库提供一个完整的赛博朋克参考包：
+仓库提供三套完整的主题参考包：
 
-- 可直接导入：`doc/examples/sealchat-ui-package-cyberpunk-neon.json`。
-- 可读 CSS 源码：`doc/examples/cyberpunk-ui-package.css`。
+- NEON//RUNNER 霓虹夜行：可直接导入 `doc/ui-customization-package/sealchat-ui-package-neon-runner.json`，源码为 `theme-neon-runner.css` / `theme-neon-runner.js`。
+- R'LYEH ARCHIVE 拉莱耶档案馆：可直接导入 `doc/ui-customization-package/sealchat-ui-package-rlyeh-archive.json`，源码为 `theme-rlyeh-archive.css` / `theme-rlyeh-archive.js`。
+- TRIANGLE AGENCY 三角机构：可直接导入 `doc/ui-customization-package/sealchat-ui-package-triangle-agency.json`，源码为 `theme-triangle-agency.css` / `theme-triangle-agency.js`。
 
-导入后，SealChat 会创建一个新的停用包。先检查 CSS，再手动启用。示例包不包含 JavaScript。
+导入后，SealChat 会创建一个新的停用包。先检查 CSS 和 JavaScript，再手动启用。
 
 如果 CSS 导致页面无法操作，在当前地址增加 `safe-ui=1` 并重新加载。例如：
 
@@ -531,9 +532,9 @@ SealChat 同时运行在桌面浏览器、移动浏览器和嵌入容器中。
 
 完整参考包会使用少量兼容性敏感选择器来展示效果，但每一组都在 CSS 注释中标出。
 
-## 20. 赛博朋克参考包
+## 20. NEON//RUNNER 霓虹夜行参考包
 
-`doc/examples/cyberpunk-ui-package.css` 是可读源码。它覆盖：
+`theme-neon-runner.css` / `theme-neon-runner.js` 与 `sealchat-ui-package-neon-runner.json` 是一套可读、可导入的完整参考包。它覆盖：
 
 - 页面、卡片、输入框、浮层和边框语义变量。
 - 传统 21 个主题颜色字段对应的全部变量。
@@ -545,12 +546,47 @@ SealChat 同时运行在桌面浏览器、移动浏览器和嵌入容器中。
 - 音频面板和玻璃效果语义变量。
 - 滚动条、焦点、窄屏和减少动画设置。
 
-`doc/examples/sealchat-ui-package-cyberpunk-neon.json` 是同一份 CSS 的可导入版本。它使用：
+它使用：
 
 ~~~json
 "targets": ["global", "observer", "embed", "log-public"]
 ~~~
 
-所以会覆盖全部非 Internal Surface。JavaScript 为空。
+所以会覆盖全部非 Internal Surface，并演示 CSS 与 JavaScript 配套工作。
 
 这个示例用于展示接口，不代表每个主题都要覆盖这么多内容。实际分发包应只保留自己真正需要维护的选择器。
+
+## 21. 主题示例包（CSS + JavaScript）
+
+本目录保留三个完整主题包。它们演示了在稳定 hook 之上做整体换肤，并用脚本添加装饰层和交互效果；消息正文保持默认字号与高对比。
+
+| 主题 | 可导入文件 | 源码 | 夜间 / 日间 |
+| --- | --- | --- | --- |
+| 赛博朋克 · NEON//RUNNER 霓虹夜行 | `sealchat-ui-package-neon-runner.json` | `theme-neon-runner.css` / `.js` | 霓虹夜行 / 镀铬白昼 |
+| 克苏鲁的呼唤 · R'LYEH ARCHIVE 拉莱耶档案馆 | `sealchat-ui-package-rlyeh-archive.json` | `theme-rlyeh-archive.css` / `.js` | 深渊 / 档案 |
+| TRIANGLE AGENCY 三角机构 | `sealchat-ui-package-triangle-agency.json` | `theme-triangle-agency.css` / `.js` | 加班时间 / 办公时间 |
+
+所有包都使用 `"targets": ["global", "observer", "embed", "log-public"]`，并同时支持紧凑布局、气泡布局和 640 px 以下窄屏。
+
+脚本效果：
+
+- 霓虹夜行：顶栏 HUD（时钟、当前节点、本会话接收消息数），每个标签页会话一次的开机序列，新消息的信号到达动画，频道标题故障切片与随机色散。
+- 拉莱耶档案馆：深海雾气，角落触须，会跟随指针的注视之眼，理智值（SAN）氛围仪表，含禁忌词消息的文字蠕动效果，d100 大成功 / 大失败印章。理智值只保存在当前标签页的 `sessionStorage`，与游戏数据无关。
+- 三角机构：顶栏工牌 HUD，显示时钟与按频道累计的混沌（`localStorage`，可用 − / + 调整，双击数字编辑）；解析 `6d4` 等 d4 骰池，标出出 3 的成功数、产生的混沌，以及恰好三个 3 的「三重升华」（不增加混沌）；剧透文本显示为涂黑；极低频率的内部备忘与 ▲ 翻转。
+
+脚本约定：
+
+- 只向 `body` 追加 `aria-hidden` 的装饰元素，并给消息行写入 class 和 `data-*` 标记。不移动 SealChat 的 DOM，不改写消息文本，不发网络请求。
+- 所有监听、定时器和 MutationObserver 都通过 `sc.listen`、`sc.timeout`、`sc.interval`、`sc.observe` 或 `sc.cleanup` 注册，停用包时会全部释放。
+- 遵守 `prefers-reduced-motion`：开启减少动画后不播放开机序列、低语、弹字和备忘。
+- `embed`、`log-public`、`theater` 只保留 CSS 外观，不显示装饰层。
+
+CSS 不依赖脚本，可以单独使用。导入为平台包时脚本直接运行。导入为世界包时，脚本还需要平台开启 `allowWorldJs`，并由每个浏览器单独信任；未信任时只生效 CSS。
+
+字体只使用本机字体栈，不加载远程字体。
+
+修改 `theme-*.css` 或 `theme-*.js` 后，运行下面的命令重新生成 JSON：
+
+~~~bash
+node doc/ui-customization-package/build-theme-packages.mjs
+~~~
