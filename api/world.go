@@ -163,6 +163,7 @@ func WorldCreateHandler(c *fiber.Ctx) error {
 		Description               string   `json:"description"`
 		Visibility                string   `json:"visibility"`
 		Avatar                    string   `json:"avatar"`
+		CoverAttachmentID         string   `json:"coverAttachmentId"`
 		ChannelDefaultDiceMode    string   `json:"channelDefaultDiceMode"`
 		ChannelDefaultBotID       string   `json:"channelDefaultBotId"`
 		ChannelDefaultBotIDs      []string `json:"channelDefaultBotIds"`
@@ -176,6 +177,7 @@ func WorldCreateHandler(c *fiber.Ctx) error {
 		Description:               body.Description,
 		Visibility:                body.Visibility,
 		Avatar:                    body.Avatar,
+		CoverAttachmentID:         body.CoverAttachmentID,
 		ChannelDefaultDiceMode:    body.ChannelDefaultDiceMode,
 		ChannelDefaultBotID:       body.ChannelDefaultBotID,
 		ChannelDefaultBotIDs:      body.ChannelDefaultBotIDs,

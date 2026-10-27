@@ -2159,6 +2159,7 @@ export const useChatStore = defineStore({
       description?: string;
       visibility?: string;
       avatar?: string;
+      coverAttachmentId?: string;
       channelDefaultDiceMode?: 'builtin' | 'bot' | 'disabled';
       channelDefaultBotIds?: string[];
       channelDefaultBotId?: string;

@@ -63,6 +63,7 @@ type WorldCreateParams struct {
 	Description               string
 	Visibility                string
 	Avatar                    string
+	CoverAttachmentID         string
 	ChannelDefaultDiceMode    string
 	ChannelDefaultBotID       string
 	ChannelDefaultBotIDs      []string
@@ -628,10 +629,15 @@ func WorldCreate(ownerID string, params WorldCreateParams) (*model.WorldModel, *
 	if err != nil {
 		return nil, nil, err
 	}
+	coverRef, coverID, err := normalizeWorldCoverAttachment("", ownerID, "", params.CoverAttachmentID)
+	if err != nil {
+		return nil, nil, err
+	}
 	world := &model.WorldModel{
 		Name:                    name,
 		Description:             description,
 		Avatar:                  params.Avatar,
+		CoverAttachmentID:       coverRef,
 		Visibility:              visibility,
 		OwnerID:                 ownerID,
 		EnforceMembership:       false,
@@ -647,6 +653,19 @@ func WorldCreate(ownerID string, params WorldCreateParams) (*model.WorldModel, *
 	err = db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(world).Error; err != nil {
 			return err
+		}
+		if coverID != "" {
+			// Claim the unbound temporary upload atomically with world creation.
+			result := tx.Model(&model.AttachmentModel{}).
+				Where("id = ? AND user_id = ? AND root_id = ? AND root_id_type = ? AND is_temp = ?",
+					coverID, ownerID, "", worldCoverAttachmentRootType, true).
+				Updates(map[string]interface{}{"root_id": world.ID, "is_temp": false})
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return ErrWorldCoverInvalid
+			}
 		}
 		member := &model.WorldMemberModel{
 			WorldID:  world.ID,
