@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useDialog, useMessage } from 'naive-ui';
-import { Bell, Book, DoorExit, Eye, History, Robot, Settings, Share, Users } from '@vicons/tabler';
+import { Bell, Book, Code, DoorExit, Eye, History, Robot, Settings, Share, ShieldCheck, Users } from '@vicons/tabler';
 import { useChatStore } from '@/stores/chat';
 import WorldManager from '../WorldManager.vue';
 import WorldMemberManager from '../WorldMemberManager.vue';
@@ -10,6 +10,8 @@ import EmailNotificationManager from '@/views/split/components/EmailNotification
 import { getInviteStatusInfo, pickLatestInviteByRole } from '../worldInviteStatus';
 import WorldDetailHero from './WorldDetailHero.vue';
 import WorldDetailAccessPanel from './WorldDetailAccessPanel.vue';
+import UICustomizationManager from '@/components/ui-customization/UICustomizationManager.vue';
+import { getUICustomizationTrustStore, useUICustomizationTrustPrompt } from '@/services/ui-customization/runtime';
 
 const props = defineProps<{ worldId: string }>();
 const emit = defineEmits<{ (e: 'switch-variant'): void }>();
@@ -19,7 +21,7 @@ const router = useRouter();
 const message = useMessage();
 const dialog = useDialog();
 
-type SectionKey = 'overview' | 'access' | 'notify' | 'manage' | 'more';
+type SectionKey = 'overview' | 'access' | 'notify' | 'manage' | 'ui' | 'more';
 type AccessDrawerKind = 'observer' | 'agent' | 'log';
 
 const detail = ref<any>(null);
@@ -70,6 +72,7 @@ const sections = computed(() => {
       { key: 'access', label: '访问与共享' },
       { key: 'notify', label: '通知' },
       { key: 'manage', label: '管理' },
+      { key: 'ui', label: '界面与扩展' },
     );
   }
   items.push({ key: 'more', label: '更多' });
@@ -143,12 +146,29 @@ watch(() => props.worldId, () => {
   void loadDetail();
 }, { immediate: true });
 
+// World script decisions are per browser; members can reset them here.
+const scriptDecisionVersion = ref(0);
+const scriptDecisions = computed(() => {
+  void scriptDecisionVersion.value;
+  return props.worldId ? getUICustomizationTrustStore().entriesForWorld(props.worldId) : [];
+});
+const trustedScriptCount = computed(() => scriptDecisions.value.filter((e) => e.decision === 'trusted').length);
+const deniedScriptCount = computed(() => scriptDecisions.value.length - trustedScriptCount.value);
+const resetScriptDecisions = () => {
+  getUICustomizationTrustStore().forget(scriptDecisions.value.map((e) => e.id));
+  scriptDecisionVersion.value++;
+  void useUICustomizationTrustPrompt().reevaluate();
+  message.success('已清除本浏览器对该世界脚本的信任与拒绝记录');
+};
+
 const selectSection = (key: SectionKey) => {
   accessDrawerKind.value = null;
   activeSection.value = key;
   if (key === 'overview') {
     // Invites may have been created in the access section.
     void loadInviteSummary();
+  } else if (key === 'more') {
+    scriptDecisionVersion.value++;
   }
 };
 
@@ -239,7 +259,7 @@ const handleLeaveWorld = () => {
 </script>
 
 <template>
-  <div class="world-console">
+  <div class="world-console" data-sc-ui="world-console">
     <div class="world-console__inner">
       <template v-if="world">
         <WorldDetailHero
@@ -369,6 +389,17 @@ const handleLeaveWorld = () => {
 
           <section v-if="canManageWorld" class="world-console-panel world-console-card">
             <header class="world-console-card__head">
+              <n-icon size="18"><Code /></n-icon>
+              <h2 class="world-console-section-title">界面与扩展</h2>
+            </header>
+            <p class="world-console-section-desc">用自定义 CSS 与脚本包装本世界的聊天、小剧场等页面，支持导入导出。</p>
+            <footer class="world-console-card__foot">
+              <n-button size="small" secondary @click="selectSection('ui')">管理界面包</n-button>
+            </footer>
+          </section>
+
+          <section v-if="canManageWorld" class="world-console-panel world-console-card">
+            <header class="world-console-card__head">
               <n-icon size="18"><Bell /></n-icon>
               <h2 class="world-console-section-title">世界未读提醒</h2>
             </header>
@@ -415,6 +446,18 @@ const handleLeaveWorld = () => {
           </div>
         </section>
 
+        <section v-else-if="activeSection === 'ui' && canManageWorld" class="world-console-panel">
+          <header class="world-console-section-head">
+            <h2 class="world-console-section-title">界面与扩展</h2>
+            <p class="world-console-section-desc">
+              为本世界添加自定义 CSS 与脚本，加载在平台主题和平台包之上。保存、启停、排序后立即应用到当前页面，其他成员在切换页面或刷新后生效。
+            </p>
+          </header>
+          <div class="world-console-embed">
+            <UICustomizationManager :key="worldId" :scope="{ type: 'world', worldId }" :export-name="world.name || worldId" />
+          </div>
+        </section>
+
         <section v-else-if="activeSection === 'more'" class="world-console-panel">
           <header class="world-console-section-head">
             <h2 class="world-console-section-title">更多</h2>
@@ -427,6 +470,16 @@ const handleLeaveWorld = () => {
                 <div class="world-console-row__desc">当前为新版界面。切换偏好只保存在本浏览器，可随时返回。</div>
               </div>
               <n-button size="small" secondary @click="emit('switch-variant')">回到旧版</n-button>
+            </div>
+            <div v-if="scriptDecisions.length" class="world-console-row">
+              <n-icon class="world-console-row__icon" size="20"><ShieldCheck /></n-icon>
+              <div class="world-console-row__text">
+                <div class="world-console-row__title">世界脚本信任</div>
+                <div class="world-console-row__desc">
+                  本浏览器已信任 {{ trustedScriptCount }} 个、拒绝 {{ deniedScriptCount }} 个本世界脚本。清除后，再次进入时会重新询问。
+                </div>
+              </div>
+              <n-button size="small" secondary @click="resetScriptDecisions">清除记录</n-button>
             </div>
             <div v-if="isMember" class="world-console-row world-console-row--danger">
               <n-icon class="world-console-row__icon" size="20"><DoorExit /></n-icon>

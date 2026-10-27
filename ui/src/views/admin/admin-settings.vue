@@ -116,7 +116,7 @@ const saveCurrentTab = async () => {
 </script>
 
 <template>
-  <div class="sc-admin-settings-shell pointer-events-auto md:w-2/3 w-5/6 border p-4 py-4">
+  <div class="sc-admin-settings-shell pointer-events-auto md:w-2/3 w-5/6 border p-4 py-4" data-sc-ui="admin-settings">
     <div class="sc-admin-settings-header">
       <h2 class="text-lg mb-0">平台管理</h2>
       <div class="sc-admin-settings-actions">

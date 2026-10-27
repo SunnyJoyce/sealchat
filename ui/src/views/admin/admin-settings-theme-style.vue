@@ -19,6 +19,8 @@ import type { CursorThemeConfig } from '@/services/cursor/cursorTypes'
 import DicePlatformStyleEditor from '@/features/dice3d/components/DicePlatformStyleEditor.vue'
 import { downloadDiceSkinTemplate, importDiceSkinPackage } from '@/features/dice3d/diceSkinTransfer'
 import { createDefaultDice3DWorldConfig } from '@/features/dice3d/defaults'
+import UICustomizationManager from '@/components/ui-customization/UICustomizationManager.vue'
+import { api } from '@/stores/_config'
 
 type AdminThemeStyleExpose = {
   save: () => Promise<void>
@@ -61,6 +63,29 @@ const loginBackground = ref<LoginBackgroundConfig>({})
 const uiTextReplace = ref<UITextReplaceConfig>(normalizeUITextReplaceConfig())
 const cursorTheme = ref<CursorThemeConfig>(normalizeCursorTheme(null, 'platform'))
 const cursorThemeVisible = ref(false)
+
+// Platform UI customization policy is saved on its own (like packages), so
+// toggling it never mixes with this page's unsaved theme edits.
+type UICustomizationPolicyKey = 'allowWorldCss' | 'allowWorldJs' | 'allowPublicWorldCss'
+const uiCustomizationPolicySaving = ref<UICustomizationPolicyKey | ''>('')
+const uiCustomizationPolicy = computed(() => ({
+  allowWorldCss: utils.config?.uiCustomization?.allowWorldCss ?? true,
+  allowWorldJs: utils.config?.uiCustomization?.allowWorldJs ?? false,
+  allowPublicWorldCss: utils.config?.uiCustomization?.allowPublicWorldCss ?? true,
+}))
+const updateUICustomizationPolicy = async (key: UICustomizationPolicyKey, value: boolean) => {
+  const next = { ...uiCustomizationPolicy.value, [key]: value }
+  uiCustomizationPolicySaving.value = key
+  try {
+    await api.put('api/v1/config', { uiCustomization: next })
+    if (utils.config) utils.config = { ...utils.config, uiCustomization: next }
+    message.success('界面自定义策略已保存')
+  } catch (error: any) {
+    message.error(error?.response?.data?.message || error?.message || '保存策略失败')
+  } finally {
+    uiCustomizationPolicySaving.value = ''
+  }
+}
 
 const { compress: compressImage } = useImageCompressor()
 const loginBgUploading = ref(false)
@@ -868,6 +893,43 @@ defineExpose<AdminThemeStyleExpose>({
           </n-form-item>
         </n-collapse-item>
 
+        <n-collapse-item title="高级界面自定义" name="ui-customization">
+          <div class="ui-customization-section">
+            <div class="ui-customization-policy">
+              <div class="ui-customization-policy__row">
+                <n-switch
+                  :value="uiCustomizationPolicy.allowWorldCss"
+                  :loading="uiCustomizationPolicySaving === 'allowWorldCss'"
+                  @update:value="(v: boolean) => updateUICustomizationPolicy('allowWorldCss', v)"
+                />
+                <span>允许世界 CSS</span>
+              </div>
+              <div class="ui-customization-policy__row">
+                <n-switch
+                  :value="uiCustomizationPolicy.allowPublicWorldCss"
+                  :disabled="!uiCustomizationPolicy.allowWorldCss"
+                  :loading="uiCustomizationPolicySaving === 'allowPublicWorldCss'"
+                  @update:value="(v: boolean) => updateUICustomizationPolicy('allowPublicWorldCss', v)"
+                />
+                <span>世界 CSS 可进入 OB / 嵌入 / LOG 公开页</span>
+              </div>
+              <div class="ui-customization-policy__row">
+                <n-switch
+                  :value="uiCustomizationPolicy.allowWorldJs"
+                  :loading="uiCustomizationPolicySaving === 'allowWorldJs'"
+                  @update:value="(v: boolean) => updateUICustomizationPolicy('allowWorldJs', v)"
+                />
+                <span>允许世界脚本</span>
+                <span class="ui-customization-policy__hint">开启后世界管理员可保存 JavaScript，成员需逐个信任后才执行；匿名公共页面始终不执行世界脚本。关闭不会删除已保存的脚本。</span>
+              </div>
+            </div>
+            <div class="ui-text-replace-note">
+              平台包对所有用户生效，按列表顺序加载在主题之上、世界包之下。平台脚本会在匹配页面执行，请只保存你信任的代码。以下修改即时保存，不需要点击页面底部的保存按钮。
+            </div>
+            <UICustomizationManager :scope="{ type: 'platform' }" export-name="platform" />
+          </div>
+        </n-collapse-item>
+
         <n-collapse-item title="界面文本自定义" name="ui-text-replace">
           <n-form-item label="启用替换">
             <div class="ui-text-replace-toggle-row">
@@ -1215,6 +1277,10 @@ defineExpose<AdminThemeStyleExpose>({
 }
 
 .dice-style-list, .dice-style-collapse { width: 100%; }
+.ui-customization-section { display: flex; flex-direction: column; gap: 12px; padding: 0 4px 8px; }
+.ui-customization-policy { display: flex; flex-direction: column; gap: 8px; }
+.ui-customization-policy__row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.ui-customization-policy__hint { flex-basis: 100%; padding-left: 48px; font-size: 12px; line-height: 1.6; color: var(--sc-text-secondary, #6b7280); }
 .dice-style-title { display: flex; align-items: center; gap: 8px; }
 .dice-style-item__actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 

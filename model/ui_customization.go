@@ -1,0 +1,23 @@
+package model
+
+// UICustomizationPackageModel is shared by platform and world packages. Code is
+// deliberately separate from AppConfig and WorldModel. JS is only returned by
+// the runtime resolver after server-side policy filtering.
+type UICustomizationPackageModel struct {
+	StringPKBaseModel
+	ScopeType    string `gorm:"size:16;not null;index:idx_ui_customization_scope,priority:1"`
+	ScopeID      string `gorm:"size:100;not null;default:'';index:idx_ui_customization_scope,priority:2"`
+	Name         string `gorm:"size:100;not null"`
+	Description  string `gorm:"size:500"`
+	Enabled      bool   `gorm:"not null"`
+	SortOrder    int    `gorm:"not null;default:0;index:idx_ui_customization_scope,priority:3"`
+	SurfacesJSON string `gorm:"type:text;not null"`
+	// Size lets GORM choose mediumtext on MySQL (TEXT only holds 64 KiB),
+	// while retaining portable string columns on PostgreSQL and SQLite.
+	CSS       string `gorm:"size:262144"`
+	JS        string `gorm:"size:262144" json:"-"`
+	CreatedBy string `gorm:"size:100;not null"`
+	UpdatedBy string `gorm:"size:100;not null"`
+}
+
+func (UICustomizationPackageModel) TableName() string { return "ui_customization_packages" }

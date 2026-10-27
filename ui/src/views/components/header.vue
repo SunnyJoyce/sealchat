@@ -977,6 +977,7 @@ const sidebarToggleIcon = computed(() => sidebarCollapsed.value ? LayoutSidebarL
 <template>
   <div
     class="sc-header flex justify-between items-center w-full px-2"
+    data-sc-ui="header"
     :class="{ 'sc-header--observer': isObserver }"
     style="height: 3.5rem;"
   >

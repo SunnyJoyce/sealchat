@@ -527,6 +527,8 @@ type AppConfig struct {
 	WebSocket                 WebSocketConfig           `json:"websocket" yaml:"websocket"`
 	ChannelEmbedTools         ChannelEmbedToolsConfig   `json:"channelEmbedTools" yaml:"channelEmbedTools"`
 	StatusPage                StatusPageConfig          `json:"statusPage" yaml:"statusPage"`
+
+	UICustomization *UICustomizationPolicyConfig `json:"uiCustomization" yaml:"uiCustomization"`
 }
 
 // StatusPageConfig 平台状态监测的访问设置；零值即允许所有登录用户查看。
@@ -765,6 +767,7 @@ func ReadConfig() *AppConfig {
 			PanelBorderOpacity:  18,
 			PanelShadowStrength: 22,
 		},
+		UICustomization: NormalizeUICustomizationPolicy(nil),
 		ThemeManagement: ThemeManagementConfig{
 			PlatformThemes:               []PlatformThemeConfig{},
 			DefaultPlatformThemeID:       "",
@@ -875,6 +878,7 @@ func ReadConfig() *AppConfig {
 	applyAuthSessionDefaults(&config.AuthSession)
 	config.Proxy = NormalizeProxyConfig(config.Proxy)
 	config.ThemeManagement = NormalizeThemeManagementConfig(config.ThemeManagement)
+	config.UICustomization = NormalizeUICustomizationPolicy(config.UICustomization)
 	config.CursorTheme = NormalizeCursorThemeConfig(config.CursorTheme, false)
 	config.UITextReplace = NormalizeUITextReplaceConfig(config.UITextReplace)
 	config.Certificate = NormalizeCertificateConfig(config.Certificate)
@@ -1962,6 +1966,13 @@ func WriteConfigChecked(config *AppConfig) error {
 		return fmt.Errorf("配置复制失败: %w", err)
 	}
 	if config != nil {
+		config.UICustomization = NormalizeUICustomizationPolicy(config.UICustomization)
+		if err := ValidateUICustomizationPolicy(config.UICustomization); err != nil {
+			return err
+		}
+		_ = candidateK.Set("uiCustomization.allowWorldCss", config.UICustomization.AllowWorldCSS)
+		_ = candidateK.Set("uiCustomization.allowWorldJs", config.UICustomization.AllowWorldJS)
+		_ = candidateK.Set("uiCustomization.allowPublicWorldCss", config.UICustomization.AllowPublicWorldCSS)
 		config.MCP = NormalizeMCPConfig(config.MCP)
 		if err := ValidateMCPConfig(config.MCP); err != nil {
 			return err

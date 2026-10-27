@@ -1,0 +1,391 @@
+package service
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"sync"
+	"time"
+	"unicode/utf8"
+
+	"gorm.io/gorm"
+	"sealchat/model"
+	"sealchat/pm"
+	"sealchat/utils"
+)
+
+type UISurface string
+
+const (
+	UISurfaceAuth              UISurface = "auth"
+	UISurfaceLobby             UISurface = "lobby"
+	UISurfaceWorldDetail       UISurface = "world-detail"
+	UISurfaceChat              UISurface = "chat"
+	UISurfaceSplit             UISurface = "split"
+	UISurfaceEmbed             UISurface = "embed"
+	UISurfaceTheater           UISurface = "theater"
+	UISurfaceObserver          UISurface = "observer"
+	UISurfaceInvite            UISurface = "invite"
+	UISurfaceLogLayout         UISurface = "log-layout"
+	UISurfaceLogPublic         UISurface = "log-public"
+	UISurfaceStatus            UISurface = "status"
+	UISurfaceInternal          UISurface = "internal"
+	UISurfaceGlobal            UISurface = "global"
+	UICustomizationMaxPackages           = 50
+	UICustomizationMaxCSSBytes           = 256 * 1024
+	UICustomizationMaxJSBytes            = 256 * 1024
+	UICustomizationMaxCodeSize           = 384 * 1024
+)
+
+func (s UISurface) Valid() bool {
+	switch s {
+	case UISurfaceAuth, UISurfaceLobby, UISurfaceWorldDetail, UISurfaceChat,
+		UISurfaceSplit, UISurfaceEmbed, UISurfaceTheater, UISurfaceObserver,
+		UISurfaceInvite, UISurfaceLogLayout, UISurfaceLogPublic, UISurfaceStatus,
+		UISurfaceInternal, UISurfaceGlobal:
+		return true
+	}
+	return false
+}
+
+var (
+	ErrUICustomizationInvalid  = errors.New("UI customization invalid")
+	ErrUICustomizationDenied   = errors.New("UI customization permission denied")
+	ErrUICustomizationNotFound = errors.New("UI customization not found")
+	ErrUICustomizationLimit    = errors.New("UI customization package limit reached")
+	// SealChat runs a single server process. This serializes count/append and
+	// reorder operations in that process; it is not a distributed quota lock.
+	uiCustomizationMutationMu sync.Mutex
+)
+
+type UICustomizationScope struct {
+	Type string
+	ID   string
+}
+
+type UICustomizationPatch struct {
+	Name        *string      `json:"name"`
+	Description *string      `json:"description"`
+	Enabled     *bool        `json:"enabled"`
+	Surfaces    *[]UISurface `json:"surfaces"`
+	CSS         *string      `json:"css"`
+	JS          *string      `json:"js"`
+}
+
+type UICustomizationPackage struct {
+	ID          string      `json:"id"`
+	ScopeType   string      `json:"scopeType"`
+	ScopeID     string      `json:"scopeId"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	Enabled     bool        `json:"enabled"`
+	SortOrder   int         `json:"sortOrder"`
+	Surfaces    []UISurface `json:"surfaces"`
+	CSS         string      `json:"css"`
+	JS          string      `json:"js"`
+	JSHash      string      `json:"jsHash"`
+	CreatedBy   string      `json:"createdBy"`
+	UpdatedBy   string      `json:"updatedBy"`
+	CreatedAt   int64       `json:"createdAt"`
+	UpdatedAt   int64       `json:"updatedAt"`
+}
+
+func uiCustomizationView(m *model.UICustomizationPackageModel) (*UICustomizationPackage, error) {
+	var surfaces []UISurface
+	if err := json.Unmarshal([]byte(m.SurfacesJSON), &surfaces); err != nil {
+		return nil, err
+	}
+	return &UICustomizationPackage{ID: m.ID, ScopeType: m.ScopeType, ScopeID: m.ScopeID,
+		Name: m.Name, Description: m.Description, Enabled: m.Enabled, SortOrder: m.SortOrder,
+		Surfaces: surfaces, CSS: m.CSS, JS: m.JS, JSHash: UICustomizationJSHash(m.JS), CreatedBy: m.CreatedBy, UpdatedBy: m.UpdatedBy,
+		CreatedAt: m.CreatedAt.UnixMilli(), UpdatedAt: m.UpdatedAt.UnixMilli()}, nil
+}
+
+// UICustomizationJSHash identifies a script version for browser trust. Line
+// endings are normalized so CRLF/LF round trips keep the same identity. It is
+// not a signature. Empty scripts have no hash.
+func UICustomizationJSHash(js string) string {
+	if js == "" {
+		return ""
+	}
+	normalized := strings.ReplaceAll(strings.ReplaceAll(js, "\r\n", "\n"), "\r", "\n")
+	sum := sha256.Sum256([]byte(normalized))
+	return hex.EncodeToString(sum[:])
+}
+
+func uiCustomizationManage(scope UICustomizationScope, actorID string) error {
+	if actorID == "" {
+		return ErrUICustomizationDenied
+	}
+	switch scope.Type {
+	case "platform":
+		if scope.ID != "" {
+			return ErrUICustomizationInvalid
+		}
+		if !pm.CanWithSystemRole(actorID, pm.PermModAdmin) {
+			return ErrUICustomizationDenied
+		}
+	case "world":
+		if scope.ID == "" {
+			return ErrUICustomizationInvalid
+		}
+		world, err := GetWorldByID(scope.ID)
+		if err != nil {
+			return err
+		}
+		if world.Status != "active" {
+			return ErrWorldNotFound
+		}
+		// Follow world appearance/observer settings: world owner/admin only.
+		if !IsWorldAdmin(scope.ID, actorID) {
+			return ErrUICustomizationDenied
+		}
+	default:
+		return ErrUICustomizationInvalid
+	}
+	return nil
+}
+
+func uiCustomizationQuery(db *gorm.DB, scope UICustomizationScope) *gorm.DB {
+	return db.Model(&model.UICustomizationPackageModel{}).Where("scope_type = ? AND scope_id = ?", scope.Type, scope.ID)
+}
+
+func uiCustomizationRows(db *gorm.DB, scope UICustomizationScope) ([]model.UICustomizationPackageModel, error) {
+	rows := []model.UICustomizationPackageModel{}
+	err := uiCustomizationQuery(db, scope).Order("sort_order ASC, created_at ASC, id ASC").Find(&rows).Error
+	return rows, err
+}
+
+func ListUICustomizations(scope UICustomizationScope, actorID string) ([]*UICustomizationPackage, error) {
+	if err := uiCustomizationManage(scope, actorID); err != nil {
+		return nil, err
+	}
+	rows, err := uiCustomizationRows(model.GetDB(), scope)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*UICustomizationPackage, 0, len(rows))
+	for i := range rows {
+		view, err := uiCustomizationView(&rows[i])
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, view)
+	}
+	return result, nil
+}
+
+func uiCustomizationInvalid(detail string) error {
+	return fmt.Errorf("%w: %s", ErrUICustomizationInvalid, detail)
+}
+
+// applyUICustomizationPatch validates a create/update/import payload. When the
+// platform disables world scripts, existing world JS is preserved untouched
+// (so re-enabling restores it), may be cleared, but cannot be replaced.
+func applyUICustomizationPatch(m *model.UICustomizationPackageModel, p UICustomizationPatch, policy *utils.UICustomizationPolicyConfig) error {
+	invalid := uiCustomizationInvalid
+	if p.JS != nil {
+		if m.ScopeType == "world" && *p.JS != "" && *p.JS != m.JS && !utils.NormalizeUICustomizationPolicy(policy).AllowWorldJS {
+			return invalid("平台未开放世界脚本，不能写入新的 JavaScript")
+		}
+		m.JS = *p.JS
+	}
+	if p.Name != nil {
+		m.Name = strings.TrimSpace(*p.Name)
+	}
+	if p.Description != nil {
+		m.Description = strings.TrimSpace(*p.Description)
+	}
+	if p.Enabled != nil {
+		m.Enabled = *p.Enabled
+	}
+	if p.CSS != nil {
+		m.CSS = *p.CSS
+	}
+	if m.Name == "" || utf8.RuneCountInString(m.Name) > 100 {
+		return invalid("名称须为 1～100 个字符")
+	}
+	if utf8.RuneCountInString(m.Description) > 500 {
+		return invalid("描述最多 500 个字符")
+	}
+	if len(m.CSS) > UICustomizationMaxCSSBytes {
+		return invalid("CSS 最多 256 KiB")
+	}
+	if len(m.JS) > UICustomizationMaxJSBytes {
+		return invalid("JavaScript 最多 256 KiB")
+	}
+	if len(m.CSS)+len(m.JS) > UICustomizationMaxCodeSize {
+		return invalid("CSS 与 JavaScript 合计最多 384 KiB")
+	}
+	if p.Surfaces != nil {
+		if len(*p.Surfaces) == 0 || len(*p.Surfaces) > 32 {
+			return invalid("须指定 1～32 个 Surface")
+		}
+		surfaces := []UISurface{}
+		seen := map[UISurface]bool{}
+		for _, s := range *p.Surfaces {
+			if !s.Valid() {
+				return invalid("Surface 无效")
+			}
+			if !seen[s] {
+				surfaces = append(surfaces, s)
+				seen[s] = true
+			}
+		}
+		data, err := json.Marshal(surfaces)
+		if err != nil {
+			return err
+		}
+		m.SurfacesJSON = string(data)
+	}
+	if m.SurfacesJSON == "" {
+		return invalid("须指定 Surface")
+	}
+	return nil
+}
+
+func CreateUICustomization(scope UICustomizationScope, actorID string, input UICustomizationPatch, policy *utils.UICustomizationPolicyConfig) (*UICustomizationPackage, error) {
+	if err := uiCustomizationManage(scope, actorID); err != nil {
+		return nil, err
+	}
+	m := model.UICustomizationPackageModel{ScopeType: scope.Type, ScopeID: scope.ID, Enabled: true, CreatedBy: actorID, UpdatedBy: actorID}
+	if err := applyUICustomizationPatch(&m, input, policy); err != nil {
+		return nil, err
+	}
+	items, err := createUICustomizationModels(scope, []*model.UICustomizationPackageModel{&m})
+	if err != nil {
+		return nil, err
+	}
+	return items[0], nil
+}
+
+// createUICustomizationModels appends validated packages atomically, so a
+// bundle import either fits the scope quota entirely or creates nothing.
+func createUICustomizationModels(scope UICustomizationScope, models []*model.UICustomizationPackageModel) ([]*UICustomizationPackage, error) {
+	uiCustomizationMutationMu.Lock()
+	defer uiCustomizationMutationMu.Unlock()
+	err := model.GetDB().Transaction(func(tx *gorm.DB) error {
+		rows, err := uiCustomizationRows(tx, scope)
+		if err != nil {
+			return err
+		}
+		if len(rows)+len(models) > UICustomizationMaxPackages {
+			return ErrUICustomizationLimit
+		}
+		next := 0
+		if len(rows) > 0 {
+			next = rows[len(rows)-1].SortOrder + 1
+		}
+		for _, m := range models {
+			m.SortOrder = next
+			next++
+			if err := tx.Create(m).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*UICustomizationPackage, 0, len(models))
+	for _, m := range models {
+		view, err := uiCustomizationView(m)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, view)
+	}
+	return result, nil
+}
+
+func UpdateUICustomization(scope UICustomizationScope, actorID, id string, patch UICustomizationPatch, policy *utils.UICustomizationPolicyConfig) (*UICustomizationPackage, error) {
+	if err := uiCustomizationManage(scope, actorID); err != nil {
+		return nil, err
+	}
+	uiCustomizationMutationMu.Lock()
+	defer uiCustomizationMutationMu.Unlock()
+	var m model.UICustomizationPackageModel
+	err := uiCustomizationQuery(model.GetDB(), scope).Where("id = ?", id).Take(&m).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrUICustomizationNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := applyUICustomizationPatch(&m, patch, policy); err != nil {
+		return nil, err
+	}
+	m.UpdatedBy = actorID
+	m.UpdatedAt = time.Now()
+	result := uiCustomizationQuery(model.GetDB(), scope).Where("id = ?", id).Updates(map[string]any{
+		"name": m.Name, "description": m.Description, "enabled": m.Enabled, "surfaces_json": m.SurfacesJSON,
+		"css": m.CSS, "js": m.JS, "updated_by": m.UpdatedBy, "updated_at": m.UpdatedAt,
+	})
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, ErrUICustomizationNotFound
+	}
+	return uiCustomizationView(&m)
+}
+
+func DeleteUICustomization(scope UICustomizationScope, actorID, id string) error {
+	if err := uiCustomizationManage(scope, actorID); err != nil {
+		return err
+	}
+	uiCustomizationMutationMu.Lock()
+	defer uiCustomizationMutationMu.Unlock()
+	result := uiCustomizationQuery(model.GetDB(), scope).Where("id = ?", id).Delete(&model.UICustomizationPackageModel{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrUICustomizationNotFound
+	}
+	return nil
+}
+
+// Reorder requires an exact permutation, so omitted or cross-scope IDs cannot
+// silently change the order of a different scope or a concurrently added item.
+func ReorderUICustomizations(scope UICustomizationScope, actorID string, ids []string) error {
+	if err := uiCustomizationManage(scope, actorID); err != nil {
+		return err
+	}
+	if len(ids) > UICustomizationMaxPackages {
+		return ErrUICustomizationInvalid
+	}
+	uiCustomizationMutationMu.Lock()
+	defer uiCustomizationMutationMu.Unlock()
+	return model.GetDB().Transaction(func(tx *gorm.DB) error {
+		rows, err := uiCustomizationRows(tx, scope)
+		if err != nil {
+			return err
+		}
+		if len(rows) != len(ids) {
+			return ErrUICustomizationInvalid
+		}
+		remaining := map[string]bool{}
+		for _, m := range rows {
+			remaining[m.ID] = true
+		}
+		for _, id := range ids {
+			if !remaining[id] {
+				return ErrUICustomizationInvalid
+			}
+			delete(remaining, id)
+		}
+		for i, id := range ids {
+			if err := uiCustomizationQuery(tx, scope).Where("id = ?", id).Updates(map[string]any{
+				"sort_order": i, "updated_by": actorID, "updated_at": time.Now(),
+			}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}

@@ -28,6 +28,7 @@ import {
   syncDisplaySettingsDraft,
 } from './displaySettingsDraft'
 import type { AvatarVisibilityScope } from '@/stores/displayAvatarVisibility'
+import { isUICustomizationSafeSession, setUICustomizationSafeSession } from '@/services/ui-customization/runtime'
 
 interface Props {
   visible: boolean
@@ -55,6 +56,12 @@ const importFileInputRef = ref<HTMLInputElement | null>(null)
 const display = useDisplayStore()
 const onboarding = useOnboardingStore()
 const message = useMessage()
+const uiCustomizationSafeSession = ref(isUICustomizationSafeSession())
+const toggleUICustomizationSafeSession = (disabled: boolean) => {
+  uiCustomizationSafeSession.value = disabled
+  setUICustomizationSafeSession(disabled)
+  message.info(disabled ? '本次会话已停用全部界面自定义' : '本次会话已恢复界面自定义')
+}
 const timestampFormatOptions = [
   { label: '相对时间（2 分钟前）', value: 'relative' },
   { label: '仅时间（14:35）', value: 'time' },
@@ -793,6 +800,19 @@ const themeManagerMetaLabel = computed(() => `平台主题 ${display.platformThe
         <n-switch v-model:value="draft.backgroundMessageToneEnabled">
           <template #checked>增强区分</template>
           <template #unchecked>全透明</template>
+        </n-switch>
+      </section>
+
+      <section v-if="activeSettingsCategory === 'appearance'" class="display-settings__section">
+        <header>
+          <div>
+            <p class="section-title">界面自定义安全模式</p>
+            <p class="section-desc">仅当前标签页会话生效，临时停用平台与世界的全部自定义 CSS / JavaScript；刷新后仍保持，关闭标签页后自动失效</p>
+          </div>
+        </header>
+        <n-switch :value="uiCustomizationSafeSession" @update:value="toggleUICustomizationSafeSession">
+          <template #checked>本次会话已停用</template>
+          <template #unchecked>正常加载</template>
         </n-switch>
       </section>
 

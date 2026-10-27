@@ -16915,7 +16915,7 @@ onBeforeUnmount(() => {
       </div>
       <div v-show="!pinnedCollapsed" class="chat-pinned-zone__list">
         <template v-for="pinItem in pinnedRows" :key="`pinned-${pinItem.id}`">
-          <div :class="['chat-pinned-zone__row', rowClass(pinItem)]" :data-message-id="pinItem.id">
+          <div :class="['chat-pinned-zone__row', rowClass(pinItem)]" data-sc-ui="message" :data-message-id="pinItem.id">
             <div :class="rowSurfaceClass(pinItem)">
               <chat-item
                 :avatar="getMessageAvatar(pinItem)"
@@ -16952,6 +16952,7 @@ onBeforeUnmount(() => {
 
     <div
       class="chat overflow-y-auto h-full px-4 pt-6"
+      data-sc-ui="message-list"
       :class="[`chat--layout-${display.layout}`, `chat--palette-${display.palette}`, { 'chat--no-avatar': !display.showAvatar, 'chat--show-drag-indicator': display.settings.showDragIndicator, 'chat--has-background': !!channelBackgroundStyle, 'chat--background-tone-enabled': display.settings.backgroundMessageToneEnabled }]"
       v-show="rows.length > 0 || messageWindow.loadingLatest"
       @scroll="onScroll"
@@ -16964,6 +16965,7 @@ onBeforeUnmount(() => {
         <div
           :class="rowClass(entry.message)"
           :data-message-id="entry.message.id"
+          data-sc-ui="message"
           :ref="el => registerMessageRow(el as HTMLElement | null, entry.message.id || '')"
         >
           <div :class="rowSurfaceClass(entry.message)">
@@ -17258,7 +17260,7 @@ onBeforeUnmount(() => {
     >说点什么吧</div>
 
     <!-- flex-grow -->
-    <div class="edit-area flex justify-between relative" :class="{ 'edit-area--wide-input': isMobileWideInput }">
+    <div class="edit-area flex justify-between relative" data-sc-ui="composer" :class="{ 'edit-area--wide-input': isMobileWideInput }">
       <div class="history-floating space-y-3 flex flex-col items-end">
         <!-- 跳转到第一条未读消息按钮 -->
         <n-button

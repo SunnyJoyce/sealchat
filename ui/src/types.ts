@@ -775,6 +775,7 @@ export interface ServerConfig {
   audioImportEnabled?: boolean;
   loginBackground?: LoginBackgroundConfig;
   themeManagement?: ThemeManagementConfig;
+  uiCustomization?: { allowWorldCss: boolean; allowWorldJs?: boolean; allowPublicWorldCss: boolean };
   cursorTheme?: CursorThemeConfig;
   uiTextReplace?: UITextReplaceConfig;
   certificate?: CertificateConfig;

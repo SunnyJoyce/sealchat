@@ -15,6 +15,7 @@ import GlobalGlassBackground from '@/components/appearance/GlobalGlassBackground
 import QuickLoginApprovalHost from '@/components/auth/QuickLoginApprovalHost.vue'
 import WorldCluePresentationHost from '@/components/world-clue/WorldCluePresentationHost.vue'
 import SpeechHost from '@/features/tts/SpeechHost.vue'
+import UICustomizationTrustHost from '@/components/ui-customization/UICustomizationTrustHost.vue'
 import { useCursorThemeRuntime } from '@/services/cursor/cursorRuntime'
 import { installMessageSoundNotifier } from '@/services/messageSoundNotifier'
 
@@ -109,6 +110,7 @@ onUnmounted(() => {
         <GlobalLobbyAnnouncementHost v-if="!hideGlobalHosts" />
         <QuickLoginApprovalHost v-if="!hideGlobalHosts" />
         <WorldCluePresentationHost v-if="!hideGlobalHosts" :world-id="worldClueHostWorldId" />
+        <UICustomizationTrustHost v-if="!hideGlobalHosts" />
       </n-dialog-provider>
     </n-message-provider>
   </n-config-provider>

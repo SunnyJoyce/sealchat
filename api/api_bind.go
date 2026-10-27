@@ -485,6 +485,7 @@ func Init(config *utils.AppConfig, uiStatic fs.FS) error {
 	v1.Post("/password-reset/confirm", EmailAuthPasswordResetConfirm)
 
 	v1.Get("/config", OptionalSignCheckMiddleware, ConfigGetHandler)
+	v1.Get("/ui-customizations/runtime", OptionalSignCheckMiddleware, uiCustomizationRuntime)
 	BindTTSPublicRoutes(v1)
 	v1.Get("/public/worlds/:worldId", WorldPublicDetail)
 	v1.Get("/public/ob/:slug", WorldPublicObserverResolveHandler)
@@ -545,6 +546,7 @@ func Init(config *utils.AppConfig, uiStatic fs.FS) error {
 	bindLogProjectRoutes(v1)
 	v1Auth := v1.Group("")
 	v1Auth.Use(SignCheckMiddleware)
+	bindUICustomizationRoutes(v1Auth)
 	bindPersonalAPIKeyRoutes(v1Auth)
 	bindMCPOAuthConsentRoutes(v1Auth)
 	v1Auth.Post("/user-password-change", UserChangePassword)
@@ -1096,6 +1098,10 @@ func Init(config *utils.AppConfig, uiStatic fs.FS) error {
 			newConfig.Audio.AllowWorldAudioWorkbench = *rawPayload.AllowWorldAudioWorkbench
 		}
 		newConfig.ThemeManagement = utils.NormalizeThemeManagementConfig(newConfig.ThemeManagement)
+		newConfig.UICustomization = utils.NormalizeUICustomizationPolicy(newConfig.UICustomization)
+		if err := utils.ValidateUICustomizationPolicy(newConfig.UICustomization); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": err.Error()})
+		}
 		if validateErr := utils.ValidateThemeManagementConfig(newConfig.ThemeManagement); validateErr != nil {
 			return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": validateErr.Error()})
 		}

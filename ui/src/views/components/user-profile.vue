@@ -766,7 +766,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="pointer-events-auto relative border px-4 py-2 rounded-md sc-form-scroll" style="min-width: 20rem; max-height: 80vh;">
+  <div class="pointer-events-auto relative border px-4 py-2 rounded-md sc-form-scroll" data-sc-ui="user-profile" style="min-width: 20rem; max-height: 80vh;">
     <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
       <div class="text-lg">{{ $t('userProfile.title') }}</div>
       <div class="flex shrink-0 gap-2">

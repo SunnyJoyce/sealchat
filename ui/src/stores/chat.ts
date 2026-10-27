@@ -164,6 +164,7 @@ interface ChatState {
   favoriteChannelCandidatesReady: Record<string, boolean>,
   curChannel: Channel | null,
   currentWorldId: string,
+  lastConsumedWorldInvite: { slug: string; worldId: string } | null,
   observerMode: boolean,
   observerWorldId: string,
   observerChannelId: string,
@@ -1166,6 +1167,7 @@ export const useChatStore = defineStore({
     favoriteChannelCandidatesReady: {},
     curChannel: null,
     currentWorldId: readScopedLocalStorage('currentWorldId') || '',
+    lastConsumedWorldInvite: null,
     observerMode: false,
     observerWorldId: '',
     observerChannelId: '',
@@ -2414,6 +2416,7 @@ export const useChatStore = defineStore({
           this.joinedWorldIds.push(worldId);
         }
         this.setCurrentWorld(worldId);
+        this.lastConsumedWorldInvite = { slug, worldId };
       }
       return resp.data;
     },
