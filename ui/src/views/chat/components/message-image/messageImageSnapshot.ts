@@ -1,6 +1,7 @@
 import DOMPurify from 'dompurify';
 import Element from '@satorijs/element';
 import type { Message } from '@satorijs/protocol';
+import imgAvatar from '@/assets/head3.png';
 import { resolveAttachmentUrl } from '@/composables/useAttachmentResolver';
 import { normalizeAvatarTextStyle } from '@/utils/channelIdentityAvatar';
 import { buildGeneratedAvatarDataUrl } from '@/utils/generatedAvatarImage';
@@ -118,17 +119,21 @@ const resolveAvatarSource = (message: Message): string => {
       || raw?.sender_identity_avatar_text_style
       || raw?.senderIdentityAvatarTextStyle,
   );
-  if (avatarTextStyle) {
+  const useTextAvatarFallback = Boolean(
+    avatarTextStyle
+    || (raw?.identity?.isTemporary ?? raw?.sender_identity_is_temporary),
+  );
+  if (useTextAvatarFallback) {
     return buildGeneratedAvatarDataUrl({
       displayName: resolveSenderName(message),
       accentColor: String(raw?.identity?.color || raw?.sender_identity_color || '').trim(),
-      style: avatarTextStyle,
+      style: avatarTextStyle || undefined,
       size: 96,
     });
   }
   const fallbackSource = [raw?.member?.avatar, raw?.user?.avatar]
     .find((candidate) => typeof candidate === 'string' && candidate.trim());
-  return fallbackSource ? (resolveAttachmentUrl(fallbackSource) || fallbackSource) : '';
+  return fallbackSource ? (resolveAttachmentUrl(fallbackSource) || fallbackSource) : imgAvatar;
 };
 
 const resolveSenderColor = (message: Message): string | undefined => {

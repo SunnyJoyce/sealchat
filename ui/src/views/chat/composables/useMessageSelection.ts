@@ -313,16 +313,36 @@ export const useMessageSelection = ({
       currentUserId: user.info.id,
       resolveUserName: (userId) => channelUserNames.get(userId) || '',
     });
-    const palette = resolveMessageImageSnapshotPalette(
-      document.documentElement.dataset.displayPalette === 'night',
-    );
+    const palette = resolveMessageImageSnapshotPalette(display.palette === 'night');
     const rootStyles = getComputedStyle(document.documentElement);
+    const readThemeValue = (...names: string[]) => {
+      for (const name of names) {
+        const value = rootStyles.getPropertyValue(name).trim();
+        if (value) return value;
+      }
+      return '';
+    };
+    const readOpaqueBackground = (...names: string[]) => {
+      for (const name of names) {
+        const value = rootStyles.getPropertyValue(name).trim();
+        if (value && value.toLowerCase() !== 'transparent') return value;
+      }
+      return '';
+    };
     const snapshotWidth = display.settings.messageImageSnapshotWidth || MESSAGE_IMAGE_SNAPSHOT_WIDTH;
     const snapshotPalette = {
       ...palette,
-      background: rootStyles.getPropertyValue('--custom-chat-stage-bg').trim()
-        || rootStyles.getPropertyValue('--chat-ic-bg').trim()
+      background: readOpaqueBackground('--custom-chat-stage-bg', '--chat-stage-bg', '--sc-bg-page', '--sc-bg-surface')
         || palette.background,
+      primaryText: readThemeValue('--chat-text-primary', '--sc-text-primary', '--sc-fg-primary')
+        || palette.primaryText,
+      secondaryText: readThemeValue('--chat-text-secondary', '--sc-text-secondary', '--sc-fg-muted')
+        || palette.secondaryText,
+      subtleBorder: readThemeValue('--chat-border-mute', '--sc-border-mute')
+        || palette.subtleBorder,
+      codeBackground: readThemeValue('--chat-inline-code-bg', '--sc-bg-layer')
+        || palette.codeBackground,
+      link: readThemeValue('--primary-color') || palette.link,
     };
     const host = document.createElement('div');
     host.style.position = 'fixed';
@@ -334,6 +354,7 @@ export const useMessageSelection = ({
     const snapshotApp = createApp(MessageImageSnapshot, {
       groups,
       palette: snapshotPalette,
+      layout: display.layout,
     });
     let mounted = false;
 
