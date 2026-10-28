@@ -4,14 +4,15 @@ import { NButton, NColorPicker, NForm, NFormItem, NIcon, NInput, NInputNumber, N
 import { DeviceFloppy, X } from '@vicons/tabler'
 import { urlBase } from '@/stores/_config'
 import { chatEvent } from '@/stores/chat'
-import { useWorldClueStore, type WorldClueDetail, type WorldCluePresentation } from '@/stores/worldClue'
+import { useWorldClueStore, type WorldClueContentFormat, type WorldClueDetail, type WorldCluePresentation } from '@/stores/worldClue'
 import RichTextEditor from '@/components/rich-text/RichTextEditor.vue'
 import WorldClueContentView from '@/components/world-clue/WorldClueContentView.vue'
 import WorldClueDistributionPanel from './WorldClueDistributionPanel.vue'
 import { uploadImageAttachment } from '@/views/chat/composables/useAttachmentUploader'
 import { convertTextContentFormat } from '@/utils/textContentFormat'
 
-const props = defineProps<{ show: boolean; worldId: string; channelId: string; clue?: WorldClueDetail | null; canManage: boolean }>()
+type WorldClueInitialDraft = { title?: string; content?: string; contentFormat?: WorldClueContentFormat }
+const props = defineProps<{ show: boolean; worldId: string; channelId: string; clue?: WorldClueDetail | null; initialDraft?: WorldClueInitialDraft | null; canManage: boolean }>()
 const emit = defineEmits<{ (event: 'update:show', value: boolean): void; (event: 'saved', clue: WorldClueDetail): void }>()
 const store = useWorldClueStore()
 const message = useMessage()
@@ -346,21 +347,22 @@ function reset() {
   selectedImageName.value = ''
   selectedBackgroundMediaName.value = ''
   activeTab.value = 'content'
-  hydrateFromClue(props.clue || null)
+  hydrateFromClue(props.clue || null, props.clue ? null : props.initialDraft || null)
   if (workingClue.value?.id) {
     ensureLockRenewTimer()
     void store.loadEditLocks(props.worldId, workingClue.value.id).catch(() => undefined)
   }
 }
 
-function hydrateFromClue(clue: WorldClueDetail | null) {
+function hydrateFromClue(clue: WorldClueDetail | null, initialDraft: WorldClueInitialDraft | null = null) {
   autosaveReady.value = false
   clearAutosaveTimer()
   workingClue.value = clue
-  form.title = clue?.title || ''
+  const draft = clue ? null : initialDraft
+  form.title = clue?.title ?? draft?.title ?? ''
   form.kind = clue?.kind || 'text'
-  form.contentFormat = clue?.contentFormat || 'plain'
-  form.content = clue?.content || ''
+  form.contentFormat = clue?.contentFormat ?? draft?.contentFormat ?? 'plain'
+  form.content = clue?.content ?? draft?.content ?? ''
   form.imageAttachmentId = clue?.imageAttachmentId || ''
   form.imageUrl = clue?.imageUrl || ''
   form.embedUrl = clue?.embedUrl || ''

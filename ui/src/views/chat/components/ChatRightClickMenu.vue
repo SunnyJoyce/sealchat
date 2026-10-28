@@ -78,6 +78,19 @@ const detectContentMode = (content?: string): 'plain' | 'rich' => {
   return 'plain';
 };
 
+const messageContentToPlainText = (content?: string): string => {
+  if (!content) return '';
+  if (detectContentMode(content) === 'rich') {
+    try {
+      return tiptapJsonToPlainText(JSON.parse(content));
+    } catch (error) {
+      console.warn('富文本解析失败，回退为空文本', error);
+      return '';
+    }
+  }
+  return restoreQuickFormatTextFromHtml(contentUnescape(content)).trim();
+};
+
 const resolveWhisperTargetId = (msg?: any): string | null => {
   if (!msg) {
     return null;
@@ -217,6 +230,16 @@ const canEdit = computed(() => {
     }
   }
   return false;
+});
+
+const clueDraftContent = computed(() => messageContentToPlainText(menuMessage.value.raw?.content || ''));
+const canAddToClueBox = computed(() => {
+  const worldId = String(chat.currentWorldId || '').trim();
+  const role = worldId ? chat.worldDetailMap[worldId]?.memberRole : '';
+  return !chat.observerMode
+    && Boolean(chat.curChannel?.id)
+    && (role === 'owner' || role === 'admin')
+    && Boolean(clueDraftContent.value.trim());
 });
 
 const canWhisper = computed(() => {
@@ -628,26 +651,28 @@ const clickResizeImage = () => {
 };
 
 const clickCopy = async () => {
-  const content = menuMessage.value.raw?.content || '';
-  let copyText = '';
-  if (detectContentMode(content) === 'rich') {
-    try {
-      const json = JSON.parse(content);
-      copyText = tiptapJsonToPlainText(json);
-    } catch (error) {
-      console.warn('富文本解析失败，回退为纯文本复制', error);
-      copyText = '';
-    }
-  } else {
-    copyText = restoreQuickFormatTextFromHtml(contentUnescape(content)).trim();
-  }
-
+  const copyText = messageContentToPlainText(menuMessage.value.raw?.content || '');
   const copied = await copyTextWithFallback(copyText);
   if (copied) {
     message.success("已复制");
   } else {
     message.error('复制失败');
   }
+}
+
+const clickAddToClueBox = () => {
+  if (!canAddToClueBox.value) return;
+  const worldId = String(chat.currentWorldId || '').trim();
+  const channelId = String(chat.curChannel?.id || '').trim();
+  const content = clueDraftContent.value;
+  chat.messageMenu.show = false;
+  chatEvent.emit('world-clue-create' as any, {
+    worldId,
+    channelId,
+    title: '',
+    content,
+    contentFormat: 'plain',
+  } as any);
 }
 
 const addToMyEmoji = async () => {
@@ -898,6 +923,7 @@ const clickArchiveMessagesBefore = () => {
     <context-menu-item v-if="!chat.messageMenu.hasImage" label="复制内容" @click="clickCopy" />
     <context-menu-item label="复制消息链接" @click="clickCopyMessageLink" />
     <context-menu-item label="转发" @click="clickForward" />
+    <context-menu-item v-if="canAddToClueBox" label="添加到线索箱" @click="clickAddToClueBox" />
     <context-menu-item v-if="canWhisper" :label="t('whisper.menu')" @click="clickWhisper" />
     <context-menu-item label="回复" @click="clickReplyTo" />
     <context-menu-item v-if="canSetMessageInsertTarget" :label="insertTargetMenuLabel" @click="clickToggleMessageInsertTarget" />
