@@ -715,6 +715,7 @@ const dropdownMenuClass = computed(() => (
 ));
 const dropdownMenuProps = () => ({
   class: dropdownMenuClass.value,
+  'data-sc-ui': 'identity-popup',
 });
 
 // Avatar setup badge logic
@@ -1183,28 +1184,6 @@ watch([dropdownVisible, sortedIdentitySignature, () => canManageIdentities.value
 
 .identity-option-node--placeholder {
   opacity: 0.78;
-}
-
-:global(.identity-dropdown-menu.identity-dropdown-menu--night) {
-  background-color: #0f172a;
-  color: rgba(248, 250, 252, 0.95);
-}
-
-:global(.identity-dropdown-menu.identity-dropdown-menu--night .n-dropdown-option) {
-  color: rgba(248, 250, 252, 0.95);
-}
-
-:global(.identity-dropdown-menu.identity-dropdown-menu--night .n-dropdown-option:hover) {
-  background-color: rgba(59, 130, 246, 0.25);
-  color: #fff;
-}
-
-:global(.identity-dropdown-menu.identity-dropdown-menu--night .n-dropdown-option-body--active::before) {
-  background-color: rgba(59, 130, 246, 0.25);
-}
-
-:global(.identity-dropdown-menu.identity-dropdown-menu--night .n-dropdown-divider) {
-  background-color: rgba(148, 163, 184, 0.35);
 }
 
 :global(.identity-dropdown-menu) {

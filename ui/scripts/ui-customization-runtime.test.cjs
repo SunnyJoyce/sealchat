@@ -65,6 +65,7 @@ function domFixture() {
     },
   }
   return {
+    documentElement: { dataset: {} },
     head, defaultView: { MutationObserver: class {
       constructor(callback) { this.callback = callback }
       observe() { observers.add(this) }
@@ -105,6 +106,7 @@ async function run() {
   const a = context('world-channel', { worldId: 'A' })
   await runtime.reconcile(a, false)
   assert.deepEqual(ids(), ['first', 'late', 'world'])
+  assert.equal(doc.documentElement.dataset.scUiCustomized, 'true')
   assert.equal(doc.head.children[0], theme)
   const nodes = [...doc.head.children]
   const first = nodes[1], world = nodes[3]
@@ -136,19 +138,26 @@ async function run() {
   const beforeSafe = requests
   await runtime.reconcile(a, true)
   assert.deepEqual(ids(), [])
+  assert.equal(doc.documentElement.dataset.scUiCustomized, undefined, 'safe mode left overlay theme active')
   assert.equal(requests, beforeSafe, 'safe mode performed a package request')
+  await runtime.reconcile(a, false)
+  assert.equal(doc.documentElement.dataset.scUiCustomized, 'true')
+  const beforeInternal = requests
   await runtime.reconcile({ ...a, surface: 'internal' }, false)
-  assert.equal(requests, beforeSafe, 'internal performed a package request')
+  assert.equal(requests, beforeInternal, 'internal performed a package request')
+  assert.equal(doc.documentElement.dataset.scUiCustomized, undefined, 'internal surface left overlay theme active')
 
   packages = [pkg('empty', 'platform', 0, '')]
   await runtime.reconcile(a, false)
   assert.deepEqual(ids(), [])
+  assert.equal(doc.documentElement.dataset.scUiCustomized, undefined, 'script-only package activated CSS baseline')
   packages = [pkg('restored', 'world')]
   await runtime.reconcile(a, false)
   pending = deferred()
   const failed = runtime.reconcile(a, false)
   pending.reject(new Error('denied')); await failed
   assert.deepEqual(ids(), [], 'failed authorization left styles mounted')
+  assert.equal(doc.documentElement.dataset.scUiCustomized, undefined)
   assert.equal(theme.textContent, 'existing theme', 'existing theme changed')
   assert.equal(doc.head.children[0], theme)
   pending = deferred()
@@ -156,6 +165,7 @@ async function run() {
   runtime.dispose()
   pending.resolve({ packages: [pkg('after-dispose', 'platform')] }); await afterDispose
   assert.deepEqual(ids(), [], 'disposed runtime accepted a pending response')
+  assert.equal(doc.documentElement.dataset.scUiCustomized, undefined)
   await testInstaller()
   console.log('UI customization resolver and CSS lifecycle tests passed')
 }

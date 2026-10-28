@@ -45,7 +45,7 @@ const contextMenuTheme = computed(() => (display.palette === 'night' ? 'default 
 const contextMenuOptions = computed<MenuOptions>(() => ({
   ...chat.messageMenu.optionsComponent,
   theme: contextMenuTheme.value,
-  customClass: contextMenuClass.value,
+  customClass: `sc-overlay sc-context-menu sc-message-context-menu ${contextMenuClass.value}`,
 }))
 
 const menuMessage = computed(() => {
@@ -951,59 +951,4 @@ const clickArchiveMessagesBefore = () => {
   padding: 6px 8px;
 }
 
-:deep(.context-menu.chat-menu--night),
-:deep(.mx-context-menu.chat-menu--night) {
-  background: rgba(15, 23, 42, 0.95);
-  border-color: rgba(148, 163, 184, 0.35);
-  color: #e2e8f0;
-  --n-font-family: var(--sc-font-family);
-  font-family: var(--sc-font-family);
-}
-
-:deep(.context-menu.chat-menu--night .context-menu-item),
-:deep(.mx-context-menu.chat-menu--night .mx-context-menu-item) {
-  color: inherit;
-  font-family: inherit;
-}
-
-:deep(.context-menu.chat-menu--night .context-menu-item:hover),
-:deep(.mx-context-menu.chat-menu--night .mx-context-menu-item:hover) {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-:deep(.context-menu.chat-menu--day),
-:deep(.mx-context-menu.chat-menu--day) {
-  background: rgba(248, 250, 252, 0.98);
-  border-color: rgba(15, 23, 42, 0.08);
-  color: #0f172a;
-  --n-font-family: var(--sc-font-family);
-  font-family: var(--sc-font-family);
-}
-
-:deep(.context-menu.chat-menu--day .context-menu-item),
-:deep(.mx-context-menu.chat-menu--day .mx-context-menu-item) {
-  color: inherit;
-  font-family: inherit;
-}
-
-:deep(.context-menu.chat-menu--day .context-menu-item:hover),
-:deep(.mx-context-menu.chat-menu--day .mx-context-menu-item:hover) {
-  background: rgba(15, 23, 42, 0.06);
-}
-
-:root[data-custom-theme='true'] :deep(.context-menu.chat-menu--night),
-:root[data-custom-theme='true'] :deep(.mx-context-menu.chat-menu--night),
-:root[data-custom-theme='true'] :deep(.context-menu.chat-menu--day),
-:root[data-custom-theme='true'] :deep(.mx-context-menu.chat-menu--day) {
-  background: var(--sc-bg-surface);
-  border-color: var(--sc-border-strong);
-  color: var(--sc-text-primary);
-}
-
-:root[data-custom-theme='true'] :deep(.context-menu.chat-menu--night .context-menu-item:hover),
-:root[data-custom-theme='true'] :deep(.mx-context-menu.chat-menu--night .mx-context-menu-item:hover),
-:root[data-custom-theme='true'] :deep(.context-menu.chat-menu--day .context-menu-item:hover),
-:root[data-custom-theme='true'] :deep(.mx-context-menu.chat-menu--day .mx-context-menu-item:hover) {
-  background: var(--sc-bg-layer);
-}
 </style>

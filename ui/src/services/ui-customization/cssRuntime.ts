@@ -37,6 +37,10 @@ export function createUICustomizationRuntime({
     active = [...packages].sort(comparePackages)
     onPackages?.(active, interim, result)
     installed = active.filter(p => p.css !== '')
+    // UI Packages are independent of display's traditional custom color theme.
+    // Detached overlays need a root-level activation hook for their shared baseline.
+    if (installed.length) doc.documentElement.dataset.scUiCustomized = 'true'
+    else delete doc.documentElement.dataset.scUiCustomized
     const ids = new Set(installed.map(p => p.id))
     for (const [id, style] of styles) {
       if (!ids.has(id)) { style.remove(); styles.delete(id) }

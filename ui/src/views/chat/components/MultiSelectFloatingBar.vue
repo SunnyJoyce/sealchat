@@ -193,7 +193,8 @@ const handleToggleRangeMode = () => {
     <div
       v-if="isActive"
       ref="barRef"
-      class="multi-select-bar"
+      class="multi-select-bar sc-overlay"
+      data-sc-ui="selection-toolbar"
       :class="{ 'is-dragging': dragging, 'is-floating': !!draggedPosition }"
       :style="barStyle"
     >
@@ -385,22 +386,16 @@ const handleToggleRangeMode = () => {
   gap: 16px;
   padding: 10px 16px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.66);
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
+  background: var(--sc-bg-elevated);
+  border: 1px solid var(--sc-border-mute);
+  box-shadow: var(--chat-message-shadow);
   backdrop-filter: blur(12px);
-  color: #111827;
+  color: var(--sc-text-primary);
+  font-family: var(--sc-font-family);
   box-sizing: border-box;
   max-width: calc(100vw - 24px);
   user-select: none;
   overflow: visible;
-}
-
-:root[data-display-palette='night'] .multi-select-bar {
-  background: rgba(20, 24, 36, 0.66);
-  border-color: rgba(255, 255, 255, 0.1);
-  color: rgba(248, 250, 252, 0.95);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 
 .multi-select-bar.is-dragging {
@@ -423,22 +418,12 @@ const handleToggleRangeMode = () => {
   flex-shrink: 0;
 
   &:hover {
-    background: rgba(15, 23, 42, 0.08);
+    background: var(--sc-bg-hover);
   }
 
   &.is-dragging {
     cursor: grabbing;
-    background: rgba(15, 23, 42, 0.12);
-  }
-}
-
-:root[data-display-palette='night'] .multi-select-bar__drag-handle {
-  &:hover {
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  &.is-dragging {
-    background: rgba(255, 255, 255, 0.16);
+    background: var(--sc-bg-active);
   }
 }
 
@@ -468,12 +453,8 @@ const handleToggleRangeMode = () => {
 .multi-select-bar__divider {
   width: 1px;
   height: 24px;
-  background: rgba(15, 23, 42, 0.1);
+  background: var(--sc-border-mute);
   margin: 0 8px;
-}
-
-:root[data-display-palette='night'] .multi-select-bar__divider {
-  background: rgba(255, 255, 255, 0.1);
 }
 
 .multi-select-bar__button {
@@ -491,7 +472,7 @@ const handleToggleRangeMode = () => {
   transition: all 0.15s ease;
 
   &:hover:not(.is-disabled) {
-    background: rgba(15, 23, 42, 0.08);
+    background: var(--sc-bg-hover);
   }
 
   &.is-disabled {
@@ -504,8 +485,8 @@ const handleToggleRangeMode = () => {
   }
 
   &.is-active {
-    background: rgba(59, 130, 246, 0.15);
-    color: #3b82f6;
+    background: var(--sc-bg-active);
+    color: var(--sc-text-primary);
   }
 
   &--cancel {
@@ -513,12 +494,6 @@ const handleToggleRangeMode = () => {
     &:hover {
       opacity: 1;
     }
-  }
-}
-
-:root[data-display-palette='night'] .multi-select-bar__button {
-  &:hover:not(.is-disabled) {
-    background: rgba(255, 255, 255, 0.1);
   }
 }
 
@@ -564,19 +539,13 @@ const handleToggleRangeMode = () => {
     height: 22px;
     min-height: 22px;
     padding: 0;
-    border: 1px solid rgba(15, 23, 42, 0.14);
+    border: 1px solid var(--sc-border-mute);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.96);
+    background: var(--sc-bg-elevated);
     transform: translateY(-42%);
     align-self: auto;
-    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.18);
+    box-shadow: var(--chat-message-shadow);
     z-index: 1;
-  }
-
-  :root[data-display-palette='night'] .multi-select-bar__drag-handle {
-    background: rgba(20, 24, 36, 0.98);
-    border-color: rgba(255, 255, 255, 0.12);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.38);
   }
 
   .multi-select-bar__drag-handle :deep(svg) {

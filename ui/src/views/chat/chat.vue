@@ -16857,7 +16857,8 @@ onBeforeUnmount(() => {
     <div
       v-if="selectionBar.visible"
       ref="selectionBarRef"
-      class="selection-floating-bar"
+      class="selection-floating-bar sc-overlay"
+      data-sc-ui="selection-toolbar"
       :style="{ top: `${selectionBar.position.y}px`, left: `${selectionBar.position.x}px` }"
     >
       <button class="selection-floating-bar__button" @click="handleSelectionCopy">
