@@ -3,7 +3,7 @@ import type { MenuOptions } from '@imengyu/vue3-context-menu';
 import type { User } from '@satorijs/protocol';
 import { chatEvent, useChatStore } from '@/stores/chat';
 import { useUtilsStore } from '@/stores/utils';
-import { computed, ref, defineAsyncComponent } from 'vue';
+import { computed, ref, defineAsyncComponent, watch } from 'vue';
 import Element from '@satorijs/element'
 import { useDialog, useMessage, useThemeVars } from 'naive-ui';
 import { useUserStore } from '@/stores/user';
@@ -17,6 +17,9 @@ import { generateMessageLink } from '@/utils/messageLink';
 import { resolvePublicLinkBase } from '@/utils/publicLinkBase';
 import { navigateToMessageTarget } from '@/utils/messageJump';
 import { copyTextWithFallback } from '@/utils/clipboard';
+import { describeMessageFavoriteError, type MessageFavoriteScope } from '@/features/message-favorites/api';
+import { summarizeFavoriteBatch } from '@/features/message-favorites/presentation';
+import { useMessageFavoriteStore } from '@/features/message-favorites/store';
 const ReactionQuickPicker = defineAsyncComponent(() => import('./ReactionQuickPicker.vue'));
 const EmojiPickerModal = defineAsyncComponent(() => import('./EmojiPickerModal.vue'));
 const MultiNpcRepeatMessageModal = defineAsyncComponent(() => import('./MultiNpcRepeatMessageModal.vue'));
@@ -42,8 +45,11 @@ const multiNpcRepeatTarget = ref<{
 
 const contextMenuClass = computed(() => (display.palette === 'night' ? 'chat-menu--night' : 'chat-menu--day'))
 const contextMenuTheme = computed(() => (display.palette === 'night' ? 'default dark' : 'default'))
+// 消息收藏悬浮窗（z-index 1210）打开时仍需能从右键菜单收藏消息。
+const contextMenuZIndex = computed(() => Math.max(Number(chat.messageMenu.optionsComponent.zIndex) || 0, 1220))
 const contextMenuOptions = computed<MenuOptions>(() => ({
   ...chat.messageMenu.optionsComponent,
+  zIndex: contextMenuZIndex.value,
   theme: contextMenuTheme.value,
   customClass: `sc-overlay sc-context-menu sc-message-context-menu ${contextMenuClass.value}`,
 }))
@@ -744,6 +750,47 @@ const clickForward = () => {
   } as any);
 };
 
+// 收藏：普通消息的主入口直接操作世界收藏；个人收藏保留为独立入口。
+const favoriteStore = useMessageFavoriteStore();
+const favoriteMenu = computed(() => {
+  const raw = menuMessage.value.raw;
+  const messageId = String(raw?.id || '').trim();
+  const worldId = String(chat.currentWorldId || '').trim();
+  const isWhisper = Boolean(raw?.isWhisper ?? raw?.is_whisper);
+  const personalId = messageId ? favoriteStore.knownFavoriteId('personal', '', messageId) : '';
+  const worldIdKnown = messageId && worldId ? favoriteStore.knownFavoriteId('world', worldId, messageId) : '';
+  const worldVisible = Boolean(worldId) && favoriteStore.worldManageHint(worldId, chat.worldDetailMap[worldId]?.memberRole);
+  return {
+    available: Boolean(messageId) && !chat.observerMode && Boolean(user.info.id),
+    personalLabel: personalId ? '取消个人收藏' : '收藏到个人',
+    worldVisible: worldVisible && (!isWhisper || Boolean(worldIdKnown)),
+    worldLabel: worldIdKnown ? '取消世界收藏' : '收藏消息',
+  };
+});
+
+watch(() => chat.messageMenu.show, (show) => {
+  if (show) favoriteStore.probeWorldPermission(String(chat.currentWorldId || '').trim());
+});
+
+const clickFavorite = async (scope: MessageFavoriteScope) => {
+  const messageId = String(menuMessage.value.raw?.id || '').trim();
+  const worldId = scope === 'world' ? String(chat.currentWorldId || '').trim() : '';
+  chat.messageMenu.show = false;
+  if (!messageId || (scope === 'world' && !worldId)) return;
+  const knownId = favoriteStore.knownFavoriteId(scope, worldId, messageId);
+  try {
+    if (knownId) {
+      await favoriteStore.removeFavorite(knownId);
+      message.success(scope === 'world' ? '已取消世界收藏' : '已取消个人收藏');
+      return;
+    }
+    const summary = summarizeFavoriteBatch(scope, await favoriteStore.addMessages(scope, worldId, [messageId]));
+    message[summary.type](summary.text);
+  } catch (error) {
+    message.error(describeMessageFavoriteError(error, knownId ? '取消收藏失败' : '收藏失败'));
+  }
+};
+
 const clickCopyMessageLink = async () => {
   const msgId = menuMessage.value.raw?.id;
   const curChannelId = chat.curChannel?.id;
@@ -923,6 +970,16 @@ const clickArchiveMessagesBefore = () => {
     <context-menu-item v-if="!chat.messageMenu.hasImage" label="复制内容" @click="clickCopy" />
     <context-menu-item label="复制消息链接" @click="clickCopyMessageLink" />
     <context-menu-item label="转发" @click="clickForward" />
+    <context-menu-item
+      v-if="favoriteMenu.available && favoriteMenu.worldVisible"
+      :label="favoriteMenu.worldLabel"
+      @click="clickFavorite('world')"
+    />
+    <context-menu-item
+      v-if="favoriteMenu.available"
+      :label="favoriteMenu.personalLabel"
+      @click="clickFavorite('personal')"
+    />
     <context-menu-item v-if="canAddToClueBox" label="添加到线索箱" @click="clickAddToClueBox" />
     <context-menu-item v-if="canWhisper" :label="t('whisper.menu')" @click="clickWhisper" />
     <context-menu-item label="回复" @click="clickReplyTo" />

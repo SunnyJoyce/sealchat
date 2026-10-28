@@ -798,6 +798,7 @@ func Init(config *utils.AppConfig, uiStatic fs.FS) error {
 	v1Auth.Post("/role-perms-apply", RolePermApply)
 
 	BindShortcutRuleRoutes(v1Auth)
+	BindMessageFavoriteRoutes(v1Auth)
 
 	worldGroup := v1Auth.Group("/worlds")
 	BindWorldClueRoutes(worldGroup)

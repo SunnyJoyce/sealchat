@@ -75,6 +75,7 @@ import IFormDrawer from '@/components/iform/IFormDrawer.vue';
 import IFormEmbedInstances from '@/components/iform/IFormEmbedInstances.vue';
 import StickyNoteManager from './components/StickyNoteManager.vue';
 import WorldClueBox from './components/clue-box/WorldClueBox.vue';
+import MessageFavoritesWindow from '@/features/message-favorites/MessageFavoritesWindow.vue';
 import DiceOverlayLoader from '@/features/dice3d/components/DiceOverlayLoader.vue';
 import DiceSettingsDrawer from '@/features/dice3d/components/DiceSettingsDrawer.vue';
 import DiceDock from '@/features/dice3d/components/DiceDock.vue';
@@ -588,6 +589,13 @@ const openWorldClueBoard = () => {
   worldClueBoxRef.value?.openBoard();
 };
 
+// 消息收藏窗口在本聊天壳层只挂载一次；入口只负责打开或聚焦。
+const messageFavoritesWindowRef = ref<InstanceType<typeof MessageFavoritesWindow> | null>(null);
+const messageFavoritesAvailable = computed(() => !chat.observerMode && Boolean(user.info?.id));
+const openMessageFavorites = () => {
+  messageFavoritesWindowRef.value?.open();
+};
+
 const openDice3DSettings = () => {
   dice3dSettingsVisible.value = true;
 };
@@ -695,7 +703,8 @@ type ExternalPanelKey =
   | 'clue-box'
   | 'clue-board'
   | 'battle-summary'
-  | 'shortcut-command';
+  | 'shortcut-command'
+  | 'message-favorites';
 
 const openPanelForShell = (panel: ExternalPanelKey) => {
   switch (panel) {
@@ -761,6 +770,9 @@ const openPanelForShell = (panel: ExternalPanelKey) => {
       return;
     case 'shortcut-command':
       shortcutCommandVisible.value = true;
+      return;
+    case 'message-favorites':
+      openMessageFavorites();
       return;
     default:
       return;
@@ -15982,6 +15994,7 @@ const {
   handleCancelMultiSelectRelocate,
   handleRelocateTargetPick,
   handleMultiSelectAll,
+  handleMultiSelectFavorite,
 } = useMessageSelection({ chat, rows, pinnedRows, message, dialog });
 
 const insertGalleryInline = (attachmentId: string, selection?: SelectionRange) => {
@@ -16278,6 +16291,7 @@ onBeforeUnmount(() => {
           :shortcut-command-active="shortcutCommandVisible"
           @open-shortcut-command="shortcutCommandVisible = true"
           :favorite-active="channelFavoritesVisible"
+          :message-favorites-enabled="messageFavoritesAvailable"
           :character-remark-active="characterRemarkManagerVisible"
           :channel-images-active="channelImagesPanelVisible"
           :battle-summary-enabled="showBattleSummary"
@@ -16315,6 +16329,7 @@ onBeforeUnmount(() => {
           @open-gallery="openGalleryPanel"
           @open-display-settings="openDisplaySettings('appearance')"
           @open-favorites="channelFavoritesVisible = true"
+          @open-message-favorites="openMessageFavorites"
           @open-character-remark="characterRemarkManagerVisible = true"
           @open-channel-images="openChannelImagesPanel"
           @open-battle-summary="openBattleSummary"
@@ -18309,6 +18324,7 @@ onBeforeUnmount(() => {
     @move-to-bottom="handleMultiSelectMoveToBottom"
     @relocate="handleMultiSelectRelocate"
     @select-all="handleMultiSelectAll"
+    @favorite="handleMultiSelectFavorite"
     @cancel-relocate="handleCancelMultiSelectRelocate"
   />
   <MessageForwardDialog
@@ -19080,6 +19096,7 @@ onBeforeUnmount(() => {
     :channel-id="chat.curChannel.id"
     :can-manage="canManageWorldClues"
   />
+  <MessageFavoritesWindow ref="messageFavoritesWindowRef" :available="messageFavoritesAvailable" :embedded="isEmbedMode" />
 
 	<DiceOverlayLoader v-if="!isTheaterEmbedMode && display.settings.dice3dEnabled" :surface-element="messagesListRef" />
 	<DiceDock

@@ -69,7 +69,7 @@ export const resolveMessageImageSnapshotPalette = (isNight: boolean): MessageIma
     }
 );
 
-const resolveSenderName = (message: Message): string => {
+export const resolveSenderName = (message: Message): string => {
   const raw = message as any;
   return String(
     raw?.whisperMeta?.senderMemberName
@@ -100,7 +100,7 @@ const resolveSenderUserId = (message: Message): string => {
   ).trim();
 };
 
-const resolveAvatarSource = (message: Message): string => {
+export const resolveAvatarSource = (message: Message): string => {
   const raw = message as any;
   const attachmentCandidates = [
     raw?.identity?.avatarAttachment,
@@ -136,7 +136,7 @@ const resolveAvatarSource = (message: Message): string => {
   return fallbackSource ? (resolveAttachmentUrl(fallbackSource) || fallbackSource) : imgAvatar;
 };
 
-const resolveSenderColor = (message: Message): string | undefined => {
+export const resolveSenderColor = (message: Message): string | undefined => {
   const raw = message as any;
   const color = String(raw?.identity?.color || raw?.sender_identity_color || '').trim();
   return /^#[0-9a-f]{3,8}$/i.test(color) ? color : undefined;
@@ -190,7 +190,7 @@ const renderLegacyContent = (content: string, botCommandPrefixes?: unknown): str
   }
 };
 
-const renderMessageContent = (message: Message, options: BuildMessageImageSnapshotOptions): string => {
+export const renderMessageContent = (message: Message, options: BuildMessageImageSnapshotOptions): string => {
   const content = typeof message.content === 'string' ? message.content : '';
   let html = '';
   if (isBotCommandLikeContent(content, options.botCommandPrefixes)) {

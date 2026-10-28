@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { NIcon, NTooltip } from 'naive-ui';
-import { Copy, Archive, Trash, Photo, BoxMultiple, X, ArrowsVertical, ArrowBarToDown, DotsVertical, Focus2, ArrowForwardUp } from '@vicons/tabler';
+import { NDropdown, NIcon, NTooltip, type DropdownOption } from 'naive-ui';
+import { Copy, Archive, Trash, Photo, BoxMultiple, X, ArrowsVertical, ArrowBarToDown, DotsVertical, Focus2, ArrowForwardUp, Bookmark } from '@vicons/tabler';
 import { useChatStore } from '@/stores/chat';
+import type { MessageFavoriteScope } from '@/features/message-favorites/api';
+import { useMessageFavoriteStore } from '@/features/message-favorites/store';
 
 const chat = useChatStore();
 
 const emit = defineEmits<{
   (e: 'copy'): void;
   (e: 'forward'): void;
+  (e: 'favorite', scope: MessageFavoriteScope): void;
   (e: 'archive'): void;
   (e: 'delete'): void;
   (e: 'copy-image'): void;
@@ -178,6 +181,27 @@ onBeforeUnmount(() => {
   }
 });
 
+// 收藏只占一个按钮，点击后再选择作用域。
+const favoriteStore = useMessageFavoriteStore();
+const favoriteMenuOptions = computed<DropdownOption[]>(() => {
+  const worldId = String(chat.currentWorldId || '').trim();
+  const canManage = favoriteStore.worldManageHint(worldId, chat.worldDetailMap[worldId]?.memberRole);
+  return [
+    { key: 'personal', label: '收藏到个人' },
+    {
+      key: 'world',
+      label: !worldId ? '收藏到世界（未进入世界）' : canManage ? '收藏到世界' : '收藏到世界（仅世界管理员）',
+      disabled: !worldId || !canManage,
+    },
+  ];
+});
+const handleFavoriteMenuShow = (show: boolean) => {
+  if (show) favoriteStore.probeWorldPermission(String(chat.currentWorldId || '').trim());
+};
+const handleFavoriteSelect = (key: string) => {
+  emit('favorite', key === 'world' ? 'world' : 'personal');
+};
+
 const handleCancel = () => {
   chat.exitMultiSelectMode();
   emit('cancel');
@@ -255,6 +279,26 @@ const handleToggleRangeMode = () => {
           </template>
           转发选中消息
         </n-tooltip>
+
+        <n-dropdown
+          trigger="click"
+          placement="top"
+          :z-index="tooltipZIndex"
+          :options="favoriteMenuOptions"
+          :disabled="!hasSelection"
+          @update:show="handleFavoriteMenuShow"
+          @select="handleFavoriteSelect"
+        >
+          <button
+            class="multi-select-bar__button"
+            :class="{ 'is-disabled': !hasSelection }"
+            :disabled="!hasSelection"
+            title="收藏选中消息到个人或世界"
+          >
+            <n-icon :size="16"><Bookmark /></n-icon>
+            <span>收藏</span>
+          </button>
+        </n-dropdown>
 
         <n-tooltip trigger="hover" :z-index="tooltipZIndex" :placement="tooltipPlacement">
           <template #trigger>
@@ -559,7 +603,7 @@ const handleToggleRangeMode = () => {
 
   .multi-select-bar__actions {
     display: grid;
-    grid-template-columns: repeat(10, minmax(28px, 1fr));
+    grid-template-columns: repeat(11, minmax(28px, 1fr));
     width: 100%;
     min-width: 0;
     gap: 4px;
@@ -589,7 +633,7 @@ const handleToggleRangeMode = () => {
 
 @media (max-width: 480px) {
   .multi-select-bar__actions {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
 </style>

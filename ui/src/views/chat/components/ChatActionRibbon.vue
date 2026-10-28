@@ -26,6 +26,7 @@ import {
   Bulb as ClueBoxIcon,
   LayoutBoard as ClueBoardIcon,
   Bolt as ShortcutCommandIcon,
+  Bookmark as MessageFavoritesIcon,
 } from '@vicons/tabler'
 import { DocumentTextOutline, MailOutline, NotificationsOutline } from '@vicons/ionicons5'
 import ObserverFilterModal from '../../components/ObserverFilterModal.vue'
@@ -60,6 +61,8 @@ interface Props {
   glassBackgroundActive?: boolean
   shortcutCommandActive?: boolean
   favoriteActive?: boolean
+  messageFavoritesEnabled?: boolean
+  messageFavoritesActive?: boolean
   channelImagesActive?: boolean
   battleSummaryEnabled?: boolean
   battleSummaryActive?: boolean
@@ -104,6 +107,7 @@ interface Emits {
   (e: 'open-glass-background'): void
   (e: 'open-shortcut-command'): void
   (e: 'open-favorites'): void
+  (e: 'open-message-favorites'): void
   (e: 'open-channel-images'): void
   (e: 'open-battle-summary'): void
   (e: 'open-split'): void
@@ -195,6 +199,14 @@ const allActionButtons = computed<ActionButton[]>(() => {
     { key: 'clue-board', label: '线索画板', icon: ClueBoardIcon, emitEvent: 'open-clue-board', activeKey: 'clueBoardActive', disabled: () => props.clueBoardEnabled === false || props.clueBoxEnabled === false },
     { key: 'battle-summary', label: '战报总结', icon: DocumentTextOutline, emitEvent: 'open-battle-summary', activeKey: 'battleSummaryActive', disabled: () => props.battleSummaryEnabled === false },
     { key: 'favorites', label: '频道收藏', icon: StarIcon, emitEvent: 'open-favorites', activeKey: 'favoriteActive' },
+    {
+      key: 'message-favorites',
+      label: '消息收藏',
+      icon: MessageFavoritesIcon,
+      emitEvent: 'open-message-favorites',
+      activeKey: 'messageFavoritesActive',
+      disabled: () => props.messageFavoritesEnabled === false,
+    },
     { key: 'character-remark', label: '角色备注', icon: CharacterRemarkIcon, emitEvent: 'open-character-remark', activeKey: 'characterRemarkActive' },
   ]
   

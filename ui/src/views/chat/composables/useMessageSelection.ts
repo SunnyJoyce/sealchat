@@ -7,6 +7,9 @@ import { useDisplayStore } from '@/stores/display';
 import { useUserStore } from '@/stores/user';
 import { copyTextWithFallback } from '@/utils/clipboard';
 import { dialogAskConfirm } from '@/utils/dialog';
+import { describeMessageFavoriteError, type MessageFavoriteScope } from '@/features/message-favorites/api';
+import { summarizeFavoriteBatch } from '@/features/message-favorites/presentation';
+import { useMessageFavoriteStore } from '@/features/message-favorites/store';
 import MessageImageExportPreview from '../components/message-image/MessageImageExportPreview.vue';
 import MessageImageSnapshot from '../components/message-image/MessageImageSnapshot.vue';
 import {
@@ -483,6 +486,40 @@ export const useMessageSelection = ({
     });
   };
 
+  // 批量收藏只发一个请求；成功、已存在和被拒绝合并为一条反馈。
+  let favoritePending = false;
+  const handleMultiSelectFavorite = async (scope: MessageFavoriteScope) => {
+    const selected = chat.multiSelect?.selectedIds;
+    if (!selected?.size || favoritePending) {
+      if (!selected?.size) message.warning('请先选择消息');
+      return;
+    }
+    const ordered = getMultiSelectedMessageIdsInDisplayOrder();
+    const messageIds = [...ordered, ...Array.from(selected).filter((id) => !ordered.includes(id))];
+    if (messageIds.length > 100) {
+      message.warning('一次最多收藏 100 条消息');
+      return;
+    }
+    const worldId = String(chat.currentWorldId || '').trim();
+    if (scope === 'world' && !worldId) {
+      message.warning('当前不在世界中，无法收藏到世界');
+      return;
+    }
+    favoritePending = true;
+    try {
+      const result = await useMessageFavoriteStore().addMessages(scope, worldId, messageIds);
+      const summary = summarizeFavoriteBatch(scope, result);
+      message[summary.type](summary.text);
+      if (!result.rejected.length && chat.multiSelect?.active && String(chat.currentWorldId || '').trim() === worldId) {
+        chat.exitMultiSelectMode();
+      }
+    } catch (error) {
+      message.error(describeMessageFavoriteError(error, '收藏失败'));
+    } finally {
+      favoritePending = false;
+    }
+  };
+
   const handleMultiSelectAll = () => {
     const allIds = rows.value.map((row) => row.id).filter((id): id is string => Boolean(id));
     chat.selectMessagesByIds(allIds);
@@ -507,5 +544,6 @@ export const useMessageSelection = ({
     handleCancelMultiSelectRelocate,
     handleRelocateTargetPick,
     handleMultiSelectAll,
+    handleMultiSelectFavorite,
   };
 };
