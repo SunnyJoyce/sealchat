@@ -172,6 +172,15 @@ SealChat 仍保留 `data-display-palette`、`data-display-layout` 和 `data-cust
 | `admin-settings` | 平台管理浮层。 |
 | `user-profile` | 用户资料浮层。 |
 | `ui-customization-trust` | 世界脚本信任提示。 |
+| `selection-toolbar` | 消息多选与文本选择浮动工具栏。 |
+| `keyword-tooltip` | 世界术语浮层，包括固定和嵌套气泡。 |
+| `mention-popup` | 输入区成员提及候选的 surface。 |
+| `candidate-popup` | 世界术语与快速备选候选的 surface。 |
+| `image-popup` | 输入区图片候选的 surface。 |
+| `identity-popup` | 频道身份菜单。 |
+| `font-popup` | 富文本字体选择菜单。 |
+| `color-popup` | 富文本颜色候选内容。 |
+| `floating-panel` | 聊天搜索等独立工具面板。 |
 
 推荐写法：
 
@@ -187,6 +196,12 @@ SealChat 仍保留 `data-display-palette`、`data-display-layout` 和 `data-cust
 ~~~
 
 不要把第三方包建立在 `.n-card > .n-card__content > ...` 这类层级上。Naive UI 内部结构不是稳定 API。
+
+普通二级浮层复用 `--sc-bg-elevated`、`--sc-bg-layer`、`--sc-text-primary`、`--sc-text-secondary`、`--sc-border-mute`、`--sc-bg-hover`、`--sc-bg-active` 和 `--sc-font-family`。只修改这些变量即可让浮层跟随日夜与包配色，不需要逐组件覆盖。
+
+SealChat 自有 surface 可使用公开 class `.sc-overlay` 获得背景、边框颜色、文字和字体基线，定位、尺寸、边框宽度、阴影及交互仍由组件负责。第三方消息和头像菜单分别提供 `.sc-message-context-menu`、`.sc-avatar-context-menu`，主菜单及子菜单均有这些 class。Naive UI 的浮层适配由全局基础样式维护；不要在主题包中依赖 `.mx-context-menu-*`、`.v-binder-follower-*` 或 `.n-dropdown-option-body`。
+
+有包 CSS 实际生效时，根节点提供 `data-sc-ui-customized='true'`。该属性与传统颜色主题的 `data-custom-theme` 独立，在包停用、安全模式、Internal Surface 或运行时卸载时清理。普通 Naive 浮层在任一机制启用时使用语义基线，小剧场 `.theater-secondary-surface` 保持自己的专用 palette。
 
 ## 8. 颜色主题字段和 CSS 变量
 

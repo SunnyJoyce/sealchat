@@ -73,6 +73,11 @@
   --sc-scrollbar-thumb: rgba(184, 148, 79, 0.3);
   --sc-scrollbar-thumb-hover: rgba(99, 178, 141, 0.55);
 
+  --sc-overlay-background: var(--rl-noise), var(--rl-panel-solid);
+  --sc-overlay-border-color: var(--rl-paper-edge);
+  --sc-overlay-radius: 2px;
+  --sc-overlay-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+
   --sc-font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "Source Han Sans SC", "Segoe UI", Arial, sans-serif;
   --sc-code-font: var(--rl-type);
 
@@ -900,31 +905,9 @@
   font-family: var(--rl-type);
 }
 
-:root[data-sc-surface] :is(.n-modal, .n-dialog, .n-drawer-content, .n-popover, .n-dropdown-menu, .n-base-select-menu, .n-date-panel, .n-time-picker-panel, .n-color-picker-panel) {
-  --n-color: var(--rl-panel-solid) !important;
-  --n-text-color: var(--sc-text-primary) !important;
-  --n-border-radius: 2px !important;
-  color: var(--sc-text-primary) !important;
-  background: var(--rl-noise), var(--rl-panel-solid) !important;
-  border: 1px solid var(--rl-paper-edge) !important;
-  border-radius: 2px !important;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5) !important;
-}
-
-:root[data-sc-surface] .n-popover:not(.n-popover--raw) .n-popover-arrow {
-  background-color: var(--rl-panel-solid) !important;
-}
-
 :root[data-sc-surface] :is(.n-dialog .n-dialog__title, .n-card-header__main) {
   font-family: var(--rl-serif);
   letter-spacing: 0.06em;
-}
-
-:root[data-sc-surface] .n-base-select-option {
-  --n-option-text-color: var(--sc-text-primary) !important;
-  --n-option-color-pending: var(--sc-bg-hover) !important;
-  --n-option-color-active: var(--sc-bg-active) !important;
-  --n-option-text-color-active: var(--sc-text-primary) !important;
 }
 
 :root[data-sc-surface] .n-switch {

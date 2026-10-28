@@ -69,6 +69,11 @@
   --sc-scrollbar-thumb: rgba(20, 20, 20, 0.28);
   --sc-scrollbar-thumb-hover: var(--ta-red);
 
+  --sc-overlay-background: var(--ta-sheet);
+  --sc-overlay-border-color: var(--ta-rule-strong);
+  --sc-overlay-radius: 0;
+  --sc-overlay-shadow: 6px 6px 0 rgba(20, 20, 20, 0.14);
+
   --sc-font-family: var(--ta-sans);
   --sc-code-font: var(--ta-mono);
 
@@ -825,29 +830,8 @@
   --n-border-radius: 0 !important;
 }
 
-:root[data-sc-surface] :is(.n-modal, .n-dialog, .n-drawer-content, .n-popover, .n-dropdown-menu, .n-base-select-menu, .n-date-panel, .n-time-picker-panel, .n-color-picker-panel) {
-  --n-color: var(--ta-sheet) !important;
-  --n-text-color: var(--ta-ink) !important;
-  color: var(--ta-ink) !important;
-  background: var(--ta-sheet) !important;
-  border-radius: 0 !important;
-  border: 1px solid var(--ta-rule-strong);
-  box-shadow: 6px 6px 0 rgba(20, 20, 20, 0.14) !important;
-}
-
-:root[data-sc-surface] .n-popover:not(.n-popover--raw) .n-popover-arrow {
-  background-color: var(--ta-sheet) !important;
-}
-
 :root[data-sc-surface] :is(.n-dialog .n-dialog__title, .n-card-header__main) {
   font-weight: 800;
-}
-
-:root[data-sc-surface] .n-base-select-option {
-  --n-option-text-color: var(--ta-ink) !important;
-  --n-option-color-pending: var(--sc-bg-hover) !important;
-  --n-option-color-active: var(--sc-bg-active) !important;
-  --n-option-text-color-active: var(--ta-red) !important;
 }
 
 :root[data-sc-surface] .n-switch {
