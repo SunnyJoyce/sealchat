@@ -779,6 +779,8 @@ function scheduleSave(immediate) {
 function flushSave() {
   if (S.saveTimer) { clearTimeout(S.saveTimer); S.saveTimer = null; }
   if (S.composing) { S.saveTimer = setTimeout(flushSave, 600); return; }
+  // 没有真实待保存的修改时直接返回：切页、隐藏页面等补交不应写入空白卡。
+  if (!S.modelDirty && !Object.keys(S.pendingRoot).length) { setSaveState('saved'); return; }
   var patch = {};
   var any = false;
   if (S.needsInit && S.model) {
@@ -852,7 +854,10 @@ function onHostUpdate(data) {
     } else if (hasLegacy(attrs)) {
       var migrated = migrateLegacy(attrs);
       S.model = migrated.model;
-      setRoots(migrated.root);
+      // 只补写卡上尚不存在的属性：插件或 .st 已维护的新格式数值优先于旧字段迁移值。
+      var missing = {};
+      for (var mk in migrated.root) if (attrs[mk] == null) missing[mk] = migrated.root[mk];
+      setRoots(missing);
       touchModel(true);
     } else {
       S.model = blankModel();
