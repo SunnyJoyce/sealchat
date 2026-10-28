@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import cocTemplateHtml from '../../../doc/template/sealchat-default-template-v3-coc7th.html?raw';
 import shinobigamiTemplateHtml from '../../../doc/template/sealchat-shinobigami-template-v1.html?raw';
+import daggerheartTemplateHtml from '../../../doc/template/sealchat-daggerheart-template-v1.html?raw';
 import { api } from './_config';
 import { useUserStore } from './user';
 
@@ -103,7 +104,7 @@ interface BuiltinCharacterCardTemplate {
 
 const LOCAL_TEMPLATE_STORAGE_KEY = 'sealchat_character_sheet_templates';
 const MIGRATION_FLAG_PREFIX = 'sealchat_template_migration_v1_done';
-const BUILTIN_SHEET_TYPES = new Set(['coc7', 'coc', 'dnd5e', 'dnd5', 'dnd', 'shinobigami']);
+const BUILTIN_SHEET_TYPES = new Set(['coc7', 'coc', 'dnd5e', 'dnd5', 'dnd', 'shinobigami', 'daggerheart']);
 const BUILTIN_CHARACTER_CARD_TEMPLATES: BuiltinCharacterCardTemplate[] = [
   {
     name: 'coc默认',
@@ -120,6 +121,12 @@ const BUILTIN_CHARACTER_CARD_TEMPLATES: BuiltinCharacterCardTemplate[] = [
     content: shinobigamiTemplateHtml.trim(),
     legacyMarkers: ['sealchat-shinobigami-template:v1'],
   },
+  {
+    name: '匕首之心角色卡',
+    sheetType: 'daggerheart',
+    content: daggerheartTemplateHtml.trim(),
+    legacyMarkers: [],
+  },
 ];
 
 const normalizeSheetType = (value?: string) => {
@@ -127,6 +134,7 @@ const normalizeSheetType = (value?: string) => {
   if (normalized === 'shinobigami' || normalized === '忍神') {
     return 'shinobigami';
   }
+  if (normalized === 'dh' || normalized === '匕首之心') return 'daggerheart';
   if (normalized === 'coc') return 'coc7';
   if (normalized === 'dnd5' || normalized === 'dnd') return 'dnd5e';
   return normalized;

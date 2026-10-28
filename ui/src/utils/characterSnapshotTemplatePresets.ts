@@ -1,6 +1,12 @@
 import type { TheaterCharacterOverlayTemplate } from '@/stores/channelCharacterSnapshot';
 
-export type CharacterSnapshotTemplatePreset = 'shinobigami' | 'coc';
+export type CharacterSnapshotTemplatePreset = 'shinobigami' | 'coc' | 'daggerheart';
+
+export const CHARACTER_SNAPSHOT_TEMPLATE_PRESET_LABELS: Record<CharacterSnapshotTemplatePreset, string> = {
+  coc: 'COC',
+  shinobigami: '忍神',
+  daggerheart: '匕首之心',
+};
 
 export const CHARACTER_SNAPSHOT_OVERLAY_TEMPLATE_PRESETS: Record<CharacterSnapshotTemplatePreset, TheaterCharacterOverlayTemplate> = {
   shinobigami: {
@@ -23,6 +29,16 @@ export const CHARACTER_SNAPSHOT_OVERLAY_TEMPLATE_PRESETS: Record<CharacterSnapsh
       { id: 'coc-mp', name: 'MP', current: { path: '魔法值' }, max: { path: '意志/5' }, barColor: '#436C85', textColor: '#f8fafc' },
       { id: 'coc-san', name: 'SAN', current: { path: '理智' }, max: { path: '意志' }, barColor: '#DE9960', textColor: '#f8fafc' },
       { id: 'coc-luck', name: '幸运', current: { path: '幸运' }, barColor: '#82B29B', textColor: '#f8fafc' },
+    ],
+  },
+  daggerheart: {
+    version: 1,
+    preferredColumns: 2,
+    items: [
+      { id: 'daggerheart-hp', name: '生命', current: { path: '生命' }, min: { path: '0' }, max: { path: '生命上限' }, barColor: '#962f2a', textColor: '#f8fafc' },
+      { id: 'daggerheart-stress', name: '压力', current: { path: '压力' }, max: { path: '压力上限' }, barColor: '#3d3a44', textColor: '#f8fafc' },
+      { id: 'daggerheart-hope', name: '希望', current: { path: '希望' }, max: { path: '希望上限' }, barColor: '#b8862b', textColor: '#f8fafc' },
+      { id: 'daggerheart-armor', name: '护甲', current: { path: '护甲' }, max: { path: '护甲上限' }, barColor: '#1f5a5c', textColor: '#f8fafc' },
     ],
   },
 };
@@ -50,16 +66,28 @@ export const AVATAR_WORLD_STATE_OVERLAY_TEMPLATE_PRESETS: Record<CharacterSnapsh
       { id: 'coc-luck', name: '幸运', current: { path: '幸运' }, min: { value: 0 }, max: { path: '幸运上限' }, barColor: '#82B29B', textColor: '#f8fafc' },
     ],
   },
+  daggerheart: {
+    version: 1,
+    preferredColumns: 2,
+    items: [
+      { id: 'daggerheart-hp', name: '生命', current: { path: '生命' }, min: { value: 0 }, max: { path: '生命上限' }, barColor: '#962f2a', textColor: '#f8fafc' },
+      { id: 'daggerheart-stress', name: '压力', current: { path: '压力' }, min: { value: 0 }, max: { path: '压力上限' }, barColor: '#3d3a44', textColor: '#f8fafc' },
+      { id: 'daggerheart-hope', name: '希望', current: { path: '希望' }, min: { value: 0 }, max: { path: '希望上限' }, barColor: '#b8862b', textColor: '#f8fafc' },
+      { id: 'daggerheart-armor', name: '护甲', current: { path: '护甲' }, min: { value: 0 }, max: { path: '护甲上限' }, barColor: '#1f5a5c', textColor: '#f8fafc' },
+    ],
+  },
 };
 
 export const CHARACTER_SNAPSHOT_BADGE_TEMPLATE_PRESETS: Record<CharacterSnapshotTemplatePreset, string> = {
   coc: 'HP{生命值} SAN{理智} 魔法{魔法值} 幸运{幸运}',
   shinobigami: "HP{生命值} 污损{污秽} {损伤分野}",
+  daggerheart: '生命{生命}/{生命上限} 压力{压力}/{压力上限} 希望{希望}/{希望上限} 护甲{护甲}/{护甲上限}',
 };
 
 export const getCharacterSnapshotTemplatePreset = (sheetType: string): CharacterSnapshotTemplatePreset | null => {
   const normalized = sheetType.trim().toLowerCase();
   if (normalized === 'coc' || normalized === 'coc7') return 'coc';
   if (normalized === 'shinobigami' || sheetType.trim() === '忍神') return 'shinobigami';
+  if (normalized === 'daggerheart' || normalized === 'dh' || sheetType.trim() === '匕首之心') return 'daggerheart';
   return null;
 };

@@ -125,6 +125,9 @@
                   <n-button size="tiny" @click="resetTemplateToShinobigami">
                     重置为忍神默认模板
                   </n-button>
+                  <n-button size="tiny" @click="resetTemplateToDaggerheart">
+                    重置为匕首之心默认模板
+                  </n-button>
                   <n-input
                     v-model:value="templateSaveName"
                     size="tiny"
@@ -651,6 +654,15 @@ const resetTemplateToCoc = () => {
 const resetTemplateToShinobigami = () => {
   if (windowData.value?.readOnly) return;
   const tpl = sheetStore.getDefaultTemplate('shinobigami');
+  templateText.value = tpl;
+  sheetStore.updateTemplate(props.windowId, tpl);
+  selectedTemplateMode.value = 'detached';
+  selectedTemplateId.value = '';
+};
+
+const resetTemplateToDaggerheart = () => {
+  if (windowData.value?.readOnly) return;
+  const tpl = sheetStore.getDefaultTemplate('daggerheart');
   templateText.value = tpl;
   sheetStore.updateTemplate(props.windowId, tpl);
   selectedTemplateMode.value = 'detached';

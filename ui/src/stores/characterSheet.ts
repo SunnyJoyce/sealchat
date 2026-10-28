@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import cocTemplateHtml from '../../../doc/template/sealchat-default-template-v3-coc7th.html?raw';
 import shinobigamiTemplateHtml from '../../../doc/template/sealchat-shinobigami-template-v1.html?raw';
+import daggerheartTemplateHtml from '../../../doc/template/sealchat-daggerheart-template-v1.html?raw';
 import { useCharacterCardStore } from './characterCard';
 import { useCharacterCardTemplateStore, type CharacterCardTemplateMode } from './characterCardTemplate';
 import { useChatStore } from './chat';
@@ -187,6 +188,11 @@ const isShinobigamiSheetType = (value?: string) => {
   const normalized = (value || '').trim().toLowerCase();
   if (!normalized) return false;
   return normalized === 'shinobigami' || normalized === '忍神' || normalized.startsWith('shinobigami');
+};
+
+const isDaggerheartSheetType = (value?: string) => {
+  const normalized = (value || '').trim().toLowerCase();
+  return normalized === 'daggerheart' || normalized === 'dh' || normalized === '匕首之心';
 };
 
 export const isLegacyDefaultTemplate = (template: string, sheetType?: string) => {
@@ -465,11 +471,11 @@ const getGenericDefaultTemplate = () => `<!DOCTYPE html>
 
 const getShinobigamiDefaultTemplate = () => shinobigamiTemplateHtml.trim();
 
-const getDefaultTemplate = (sheetType?: string) => (
-  isShinobigamiSheetType(sheetType)
-    ? getShinobigamiDefaultTemplate()
-    : (isCocSheetType(sheetType) ? cocTemplateHtml.trim() : getGenericDefaultTemplate())
-);
+const getDefaultTemplate = (sheetType?: string) => {
+  if (isShinobigamiSheetType(sheetType)) return getShinobigamiDefaultTemplate();
+  if (isDaggerheartSheetType(sheetType)) return daggerheartTemplateHtml.trim();
+  return isCocSheetType(sheetType) ? cocTemplateHtml.trim() : getGenericDefaultTemplate();
+};
 
 export const resolveInitialSheetTemplate = (
   cardId: string,

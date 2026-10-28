@@ -20,6 +20,7 @@ import {
   AVATAR_WORLD_STATE_OVERLAY_TEMPLATE_PRESETS,
   CHARACTER_SNAPSHOT_BADGE_TEMPLATE_PRESETS,
   CHARACTER_SNAPSHOT_OVERLAY_TEMPLATE_PRESETS,
+  CHARACTER_SNAPSHOT_TEMPLATE_PRESET_LABELS,
   getCharacterSnapshotTemplatePreset,
 } from '@/utils/characterSnapshotTemplatePresets';
 import {
@@ -947,7 +948,7 @@ const applyAvatarTemplatePreset = async (preset: keyof typeof overlayTemplatePre
       ? CHARACTER_SNAPSHOT_OVERLAY_TEMPLATE_PRESETS
       : AVATAR_WORLD_STATE_OVERLAY_TEMPLATE_PRESETS;
     await avatarState.updateSettings(channelId, { template: { source, json: JSON.stringify(presets[preset]) } });
-    message.success(`头像点击卡片已应用 ${preset === 'coc' ? 'COC' : '忍神'} 模板`);
+    message.success(`头像点击卡片已应用 ${CHARACTER_SNAPSHOT_TEMPLATE_PRESET_LABELS[preset]} 模板`);
   } catch (error: any) {
     message.error(error?.response?.err || error?.message || '应用模板失败');
   } finally {
@@ -994,7 +995,7 @@ const applySnapshotTemplatePreset = async (target: 'channel' | 'personal', prese
 const applyDefaultSnapshotTemplatePreset = async (preset: keyof typeof overlayTemplatePresets) => {
   try {
     await applySnapshotTemplatePreset(canSyncBadgeTemplate.value ? 'channel' : 'personal', preset);
-    message.success(`已启用 ${preset === 'coc' ? 'COC' : '忍神'} 默认人物卡模板`);
+    message.success(`已启用 ${CHARACTER_SNAPSHOT_TEMPLATE_PRESET_LABELS[preset]} 默认人物卡模板`);
   } catch (e: any) {
     message.error(e?.response?.err || e?.message || '默认模板启用失败');
   }
@@ -1394,7 +1395,7 @@ const effectiveBadgeTemplateInfo = computed(() => {
     personalTemplate: preference?.badgeTemplateMode === 'custom' ? preference.badgeTemplate : '',
     channelTemplate: settings?.badgeTemplate,
     rulePresetTemplate: preset ? badgeTemplatePresets[preset] : '',
-    rulePresetName: preset === 'coc' ? 'COC' : preset === 'shinobigami' ? '忍神' : '',
+    rulePresetName: preset ? CHARACTER_SNAPSHOT_TEMPLATE_PRESET_LABELS[preset] : '',
   });
 });
 
@@ -1417,7 +1418,7 @@ const effectiveOverlayTemplateInfo = computed(() => {
       : '',
     channelOff: settings?.theaterOverlayTemplateMode === 'off',
     rulePresetTemplate: preset ? JSON.stringify(overlayTemplatePresets[preset], null, 2) : '',
-    rulePresetName: preset === 'coc' ? 'COC' : preset === 'shinobigami' ? '忍神' : '',
+    rulePresetName: preset ? CHARACTER_SNAPSHOT_TEMPLATE_PRESET_LABELS[preset] : '',
     systemTemplate: JSON.stringify({ version: 1, preferredColumns: 2, items: [] }, null, 2),
   });
 });
@@ -1501,6 +1502,11 @@ const setTemplateSheetType = (value: string) => {
   }
   if (lower === 'shinobigami' || normalized === '忍神') {
     templateSheetTypePreset.value = 'shinobigami';
+    templateSheetTypeCustom.value = '';
+    return;
+  }
+  if (lower === 'daggerheart' || lower === 'dh' || normalized === '匕首之心') {
+    templateSheetTypePreset.value = 'daggerheart';
     templateSheetTypeCustom.value = '';
     return;
   }
@@ -1718,6 +1724,7 @@ const sheetTypeOptions = [
   { label: 'COC7', value: 'coc7' },
   { label: 'DND5', value: 'dnd5e' },
   { label: '忍神', value: 'shinobigami' },
+  { label: '匕首之心', value: 'daggerheart' },
   { label: '自定义', value: 'custom' },
 ];
 
@@ -1729,6 +1736,9 @@ const builtinSheetTypeAliases = new Set([
   'dnd',
   'shinobigami',
   '忍神',
+  'daggerheart',
+  'dh',
+  '匕首之心',
 ]);
 
 const newCardCustomSheetTypeOptions = computed(() => {
@@ -1773,6 +1783,11 @@ const setNewCardSheetType = (value: string) => {
   }
   if (lower === 'shinobigami' || normalized === '忍神') {
     newCardSheetTypePreset.value = 'shinobigami';
+    newCardSheetTypeCustom.value = '';
+    return;
+  }
+  if (lower === 'daggerheart' || lower === 'dh' || normalized === '匕首之心') {
+    newCardSheetTypePreset.value = 'daggerheart';
     newCardSheetTypeCustom.value = '';
     return;
   }
@@ -2539,6 +2554,7 @@ defineExpose({ openCardById });
               <p class="settings-title">应用预设徽章模板</p>
               <div class="overlay-template-presets">
                 <n-button size="tiny" :disabled="snapshotTemplateSaving" @click="applyDefaultSnapshotTemplatePreset('shinobigami')">忍神</n-button>
+                <n-button size="tiny" :disabled="snapshotTemplateSaving" @click="applyDefaultSnapshotTemplatePreset('daggerheart')">匕首之心</n-button>
                 <n-button size="tiny" :disabled="snapshotTemplateSaving" @click="applyDefaultSnapshotTemplatePreset('coc')">COC</n-button>
               </div>
             </div>
@@ -2666,6 +2682,7 @@ defineExpose({ openCardById });
               <p class="settings-title">启用默认模板</p>
               <div class="overlay-template-presets">
                 <n-button size="tiny" :disabled="snapshotTemplateSaving" @click="applyDefaultSnapshotTemplatePreset('shinobigami')">忍神</n-button>
+                <n-button size="tiny" :disabled="snapshotTemplateSaving" @click="applyDefaultSnapshotTemplatePreset('daggerheart')">匕首之心</n-button>
                 <n-button size="tiny" :disabled="snapshotTemplateSaving" @click="applyDefaultSnapshotTemplatePreset('coc')">COC</n-button>
               </div>
             </div>
@@ -2731,6 +2748,7 @@ defineExpose({ openCardById });
               <p class="settings-title">应用到当前来源</p>
               <div class="overlay-template-presets">
                 <n-button size="tiny" :disabled="!canSyncBadgeTemplate || avatarSettingsSaving" @click="applyAvatarTemplatePreset('shinobigami')">忍神</n-button>
+                <n-button size="tiny" :disabled="!canSyncBadgeTemplate || avatarSettingsSaving" @click="applyAvatarTemplatePreset('daggerheart')">匕首之心</n-button>
                 <n-button size="tiny" :disabled="!canSyncBadgeTemplate || avatarSettingsSaving" @click="applyAvatarTemplatePreset('coc')">COC</n-button>
               </div>
             </div>
