@@ -77,26 +77,27 @@ type UICustomizationPatch struct {
 }
 
 type UICustomizationPackage struct {
-	ID          string      `json:"id"`
-	Ref         string      `json:"ref"`
-	Origin      string      `json:"origin"`
-	BuiltinKey  string      `json:"builtinKey,omitempty"`
-	Version     string      `json:"version,omitempty"`
-	Readonly    bool        `json:"readonly"`
-	ScopeType   string      `json:"scopeType"`
-	ScopeID     string      `json:"scopeId"`
-	Name        string      `json:"name"`
-	Description string      `json:"description"`
-	Enabled     bool        `json:"enabled"`
-	SortOrder   int         `json:"sortOrder"`
-	Surfaces    []UISurface `json:"surfaces"`
-	CSS         string      `json:"css"`
-	JS          string      `json:"js"`
-	JSHash      string      `json:"jsHash"`
-	CreatedBy   string      `json:"createdBy"`
-	UpdatedBy   string      `json:"updatedBy"`
-	CreatedAt   int64       `json:"createdAt"`
-	UpdatedAt   int64       `json:"updatedAt"`
+	ID           string      `json:"id"`
+	Ref          string      `json:"ref"`
+	Origin       string      `json:"origin"`
+	BuiltinKey   string      `json:"builtinKey,omitempty"`
+	Version      string      `json:"version,omitempty"`
+	Readonly     bool        `json:"readonly"`
+	ScopeType    string      `json:"scopeType"`
+	ScopeID      string      `json:"scopeId"`
+	Name         string      `json:"name"`
+	Description  string      `json:"description"`
+	Enabled      bool        `json:"enabled"`
+	SortOrder    int         `json:"sortOrder"`
+	Surfaces     []UISurface `json:"surfaces"`
+	CSS          string      `json:"css"`
+	JS           string      `json:"js"`
+	JSHash       string      `json:"jsHash"`
+	CreatedBy    string      `json:"createdBy"`
+	UpdatedBy    string      `json:"updatedBy"`
+	CreatedAt    int64       `json:"createdAt"`
+	UpdatedAt    int64       `json:"updatedAt"`
+	WorldEnabled bool        `json:"worldEnabled,omitempty"`
 }
 
 func uiCustomizationView(m *model.UICustomizationPackageModel) (*UICustomizationPackage, error) {
@@ -172,6 +173,12 @@ func uiCustomizationQuery(db *gorm.DB, scope UICustomizationScope) *gorm.DB {
 	return db.Model(&model.UICustomizationPackageModel{}).Where("scope_type = ? AND scope_id = ?", scope.Type, scope.ID)
 }
 
+// Older user-created packages can have NULL builtin_key from the migration
+// that introduced builtin references. Treat NULL and empty string alike.
+func uiCustomizationNonBuiltinQuery(db *gorm.DB, scope UICustomizationScope) *gorm.DB {
+	return uiCustomizationQuery(db, scope).Where("builtin_key = ? OR builtin_key IS NULL", "")
+}
+
 func uiCustomizationRows(db *gorm.DB, scope UICustomizationScope) ([]model.UICustomizationPackageModel, error) {
 	rows := []model.UICustomizationPackageModel{}
 	err := uiCustomizationQuery(db, scope).Order("sort_order ASC, created_at ASC, id ASC").Find(&rows).Error
@@ -204,7 +211,65 @@ func ListUICustomizations(scope UICustomizationScope, actorID string) ([]*UICust
 		}
 		result = append(result, view)
 	}
+	if scope.Type == "world" {
+		var refs []model.WorldUICustomizationPlatformRefModel
+		if err := model.GetDB().Where("world_id = ?", scope.ID).Find(&refs).Error; err != nil {
+			return nil, err
+		}
+		referenced := make(map[string]bool, len(refs))
+		for _, ref := range refs {
+			referenced[ref.PlatformPackageID] = true
+		}
+		var platformRows []model.UICustomizationPackageModel
+		if err := uiCustomizationNonBuiltinQuery(model.GetDB(), UICustomizationScope{Type: "platform"}).
+			Order("sort_order ASC, created_at ASC, id ASC").Find(&platformRows).Error; err != nil {
+			return nil, err
+		}
+		platformItems := make([]*UICustomizationPackage, 0, len(platformRows))
+		for i := range platformRows {
+			view, err := uiCustomizationView(&platformRows[i])
+			if err != nil {
+				return nil, err
+			}
+			view.WorldEnabled = referenced[view.ID]
+			platformItems = append(platformItems, view)
+		}
+		result = append(platformItems, result...)
+	}
 	return result, nil
+}
+
+func SetWorldPlatformUICustomizationReference(worldID, actorID, platformPackageID string, enabled bool) error {
+	scope := UICustomizationScope{Type: "world", ID: strings.TrimSpace(worldID)}
+	if err := uiCustomizationManage(scope, actorID); err != nil {
+		return err
+	}
+	platformPackageID = strings.TrimSpace(platformPackageID)
+	if platformPackageID == "" {
+		return ErrUICustomizationInvalid
+	}
+	var pkg model.UICustomizationPackageModel
+	if err := uiCustomizationNonBuiltinQuery(model.GetDB(), UICustomizationScope{Type: "platform"}).
+		Where("id = ?", platformPackageID).Take(&pkg).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrUICustomizationNotFound
+		}
+		return err
+	}
+	query := model.GetDB().Where("world_id = ? AND platform_package_id = ?", scope.ID, platformPackageID)
+	if !enabled {
+		return query.Delete(&model.WorldUICustomizationPlatformRefModel{}).Error
+	}
+	var count int64
+	if err := query.Model(&model.WorldUICustomizationPlatformRefModel{}).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	return model.GetDB().Create(&model.WorldUICustomizationPlatformRefModel{
+		WorldID: scope.ID, PlatformPackageID: platformPackageID,
+	}).Error
 }
 
 func uiCustomizationInvalid(detail string) error {
@@ -378,14 +443,21 @@ func DeleteUICustomization(scope UICustomizationScope, actorID, id string) error
 		// cannot be deleted from the platform catalog.
 		return ErrUICustomizationBuiltin
 	}
-	result := uiCustomizationQuery(model.GetDB(), scope).Where("id = ?", id).Delete(&model.UICustomizationPackageModel{})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return ErrUICustomizationNotFound
-	}
-	return nil
+	return model.GetDB().Transaction(func(tx *gorm.DB) error {
+		result := uiCustomizationQuery(tx, scope).Where("id = ?", id).Delete(&model.UICustomizationPackageModel{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return ErrUICustomizationNotFound
+		}
+		if scope.Type == "platform" {
+			if err := tx.Where("platform_package_id = ?", id).Delete(&model.WorldUICustomizationPlatformRefModel{}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // Reorder requires an exact permutation, so omitted or cross-scope IDs cannot

@@ -540,21 +540,12 @@ const handleLeaveWorld = () => {
   height: 100%;
   overflow-y: auto;
   color: var(--sc-text-primary);
-  scrollbar-width: thin;
-  scrollbar-color: var(--sc-scrollbar-thumb) transparent;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .world-console::-webkit-scrollbar {
-  width: var(--sc-scrollbar-size, 6px);
-}
-
-.world-console::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.world-console::-webkit-scrollbar-thumb {
-  background-color: var(--sc-scrollbar-thumb);
-  border-radius: 3px;
+  display: none;
 }
 
 .world-console__inner {

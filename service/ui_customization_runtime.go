@@ -176,6 +176,7 @@ func ResolveUICustomizations(ctx UICustomizationContext, actorID string, policy 
 		scopes = append(scopes, UICustomizationScope{Type: "world", ID: worldID})
 	}
 	seenBuiltinRefs := map[string]bool{}
+	seenPlatformPackages := map[string]bool{}
 	for _, scope := range scopes {
 		var rows []model.UICustomizationPackageModel
 		if err := uiCustomizationQuery(model.GetDB(), scope).Where("enabled = ?", true).
@@ -220,8 +221,46 @@ func ResolveUICustomizations(ctx UICustomizationContext, actorID string, policy 
 				item.RequiresTrust = scope.Type == "world" && js != ""
 			}
 			result.Packages = append(result.Packages, item)
+			if scope.Type == "platform" {
+				seenPlatformPackages[m.ID] = true
+			}
 			if builtinRef != "" {
 				seenBuiltinRefs[builtinRef] = true
+			}
+		}
+		if scope.Type == "platform" && worldID != "" && policy.AllowWorldCSS && (!public || policy.AllowPublicWorldCSS) {
+			var refs []model.WorldUICustomizationPlatformRefModel
+			if err := model.GetDB().Where("world_id = ?", worldID).Find(&refs).Error; err != nil {
+				return nil, err
+			}
+			ids := make([]string, 0, len(refs))
+			for _, ref := range refs {
+				if !seenPlatformPackages[ref.PlatformPackageID] {
+					ids = append(ids, ref.PlatformPackageID)
+				}
+			}
+			if len(ids) > 0 {
+				var referenced []model.UICustomizationPackageModel
+				if err := uiCustomizationNonBuiltinQuery(model.GetDB(), UICustomizationScope{Type: "platform"}).
+					Where("id IN ?", ids).
+					Order("sort_order ASC, created_at ASC, id ASC").Find(&referenced).Error; err != nil {
+					return nil, err
+				}
+				for _, m := range referenced {
+					var surfaces []UISurface
+					if err := json.Unmarshal([]byte(m.SurfacesJSON), &surfaces); err != nil {
+						return nil, err
+					}
+					if !uiSurfaceTargeted(surfaces, ctx.Surface) {
+						continue
+					}
+					result.Packages = append(result.Packages, UICustomizationRuntimePackage{
+						ID: m.ID, Ref: m.ID, Origin: "user", ScopeType: "platform", Name: m.Name,
+						SortOrder: m.SortOrder, CreatedAt: m.CreatedAt.UnixMilli(), CSS: m.CSS,
+						JS: m.JS, JSHash: UICustomizationJSHash(m.JS),
+					})
+					seenPlatformPackages[m.ID] = true
+				}
 			}
 		}
 	}

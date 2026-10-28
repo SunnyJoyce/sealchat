@@ -32,6 +32,9 @@ func bindUICustomizationRoutes(group fiber.Router) {
 		group.Patch(prefix+"/:id", uiCustomizationUpdate)
 		group.Delete(prefix+"/:id", uiCustomizationDelete)
 	}
+	group.Put("/worlds/:worldId/ui-customizations/platform/:id", uiCustomizationPlatformRefEnable)
+	group.Delete("/worlds/:worldId/ui-customizations/platform/:id", uiCustomizationPlatformRefDisable)
+	group.Post("/admin/ui-customizations/:id/import", uiCustomizationPlatformReplaceImport)
 }
 
 func uiCustomizationScope(c *fiber.Ctx) service.UICustomizationScope {
@@ -123,6 +126,34 @@ func uiCustomizationDelete(c *fiber.Ctx) error {
 		return uiCustomizationError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func uiCustomizationPlatformRefEnable(c *fiber.Ctx) error {
+	if err := service.SetWorldPlatformUICustomizationReference(
+		uiCustomizationParam(c, "worldId"), getCurUser(c).ID, uiCustomizationParam(c, "id"), true,
+	); err != nil {
+		return uiCustomizationError(c, err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func uiCustomizationPlatformRefDisable(c *fiber.Ctx) error {
+	if err := service.SetWorldPlatformUICustomizationReference(
+		uiCustomizationParam(c, "worldId"), getCurUser(c).ID, uiCustomizationParam(c, "id"), false,
+	); err != nil {
+		return uiCustomizationError(c, err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func uiCustomizationPlatformReplaceImport(c *fiber.Ctx) error {
+	item, err := service.ReplacePlatformUICustomizationFromImport(
+		getCurUser(c).ID, uiCustomizationParam(c, "id"), c.Body(), uiCustomizationPolicy(),
+	)
+	if err != nil {
+		return uiCustomizationError(c, err)
+	}
+	return c.JSON(item)
 }
 
 func uiCustomizationImport(c *fiber.Ctx) error {

@@ -32,6 +32,7 @@ export interface UICustomizationPackage {
   updatedBy: string
   createdAt: number
   updatedAt: number
+  worldEnabled?: boolean
 }
 
 export interface UICustomizationPolicy {

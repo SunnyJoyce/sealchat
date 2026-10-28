@@ -123,6 +123,27 @@ func parseUICustomizationImport(raw []byte) ([]uiCustomizationTransferPackage, e
 	}
 }
 
+// ReplacePlatformUICustomizationFromImport replaces one platform package in
+// place. The database ID and enablement stay unchanged, so world references
+// keep following the same package after an uploaded update.
+func ReplacePlatformUICustomizationFromImport(actorID, id string, raw []byte, policy *utils.UICustomizationPolicyConfig) (*UICustomizationPackage, error) {
+	if err := uiCustomizationManage(UICustomizationScope{Type: "platform"}, actorID); err != nil {
+		return nil, err
+	}
+	items, err := parseUICustomizationImport(raw)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) != 1 {
+		return nil, uiCustomizationInvalid("覆盖更新仅支持单个 sealchat.ui-package")
+	}
+	item := &items[0]
+	return UpdateUICustomization(UICustomizationScope{Type: "platform"}, actorID, id, UICustomizationPatch{
+		Name: &item.Manifest.Name, Description: &item.Manifest.Description,
+		Surfaces: &item.Targets, CSS: &item.CSS, JS: &item.JS,
+	}, policy)
+}
+
 // ImportUICustomizations creates new copies in the target scope. File IDs are
 // never used to overwrite existing packages. Imported packages start disabled
 // so administrators can review CSS/JS before it reaches any page.

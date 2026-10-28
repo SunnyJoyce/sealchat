@@ -240,7 +240,7 @@ func DBInit(cfg *utils.AppConfig) {
 	db.AutoMigrate(&WorldClueModel{}, &WorldClueAccessModel{}, &WorldClueRosterMemberModel{}, &WorldClueFolderModel{}, &WorldClueUserStateModel{}, &WorldClueEditLockModel{})
 	db.AutoMigrate(&WorldClueBoardModel{})
 	db.AutoMigrate(&ShortcutRuleModel{})
-	if err := db.AutoMigrate(&UICustomizationPackageModel{}); err != nil {
+	if err := db.AutoMigrate(&UICustomizationPackageModel{}, &WorldUICustomizationPlatformRefModel{}); err != nil {
 		panic(fmt.Sprintf("migrate UI customization packages: %v", err))
 	}
 	db.AutoMigrate(&EmailNotificationSettingsModel{}, &EmailNotificationLogModel{})

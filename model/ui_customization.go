@@ -25,3 +25,14 @@ type UICustomizationPackageModel struct {
 }
 
 func (UICustomizationPackageModel) TableName() string { return "ui_customization_packages" }
+
+// WorldUICustomizationPlatformRefModel links a world to a platform-owned
+// customization package without copying package content.
+type WorldUICustomizationPlatformRefModel struct {
+	WorldID           string `gorm:"size:100;not null;uniqueIndex:idx_world_ui_platform_ref,priority:1;index"`
+	PlatformPackageID string `gorm:"size:100;not null;uniqueIndex:idx_world_ui_platform_ref,priority:2;index"`
+}
+
+func (WorldUICustomizationPlatformRefModel) TableName() string {
+	return "world_ui_customization_platform_refs"
+}

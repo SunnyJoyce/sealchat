@@ -36,6 +36,16 @@ export async function deleteManagedUICustomization(scope: UICustomizationManageS
   await api.delete(`${base(scope)}/${encodeURIComponent(id)}`)
 }
 
+export async function setWorldPlatformUICustomizationEnabled(worldId: string, id: string, enabled: boolean) {
+  const url = `/api/v1/worlds/${encodeURIComponent(worldId)}/ui-customizations/platform/${encodeURIComponent(id)}`
+  if (enabled) await api.put(url)
+  else await api.delete(url)
+}
+
+export async function replacePlatformUICustomizationFromImport(id: string, document: unknown) {
+  return (await api.post<UICustomizationPackage>(`/api/v1/admin/ui-customizations/${encodeURIComponent(id)}/import`, document)).data
+}
+
 export async function reorderManagedUICustomizations(scope: UICustomizationManageScope, ids: string[]) {
   await api.post(`${base(scope)}/reorder`, { ids })
 }

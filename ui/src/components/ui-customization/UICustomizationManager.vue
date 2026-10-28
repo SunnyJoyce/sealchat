@@ -5,7 +5,8 @@ import { ChevronDown, ChevronUp, DotsVertical, Download, Plus, Upload } from '@v
 import UICustomizationEditor from './UICustomizationEditor.vue'
 import {
   createManagedUICustomization, deleteManagedUICustomization, importManagedUICustomizations,
-  listManagedUICustomizations, reorderManagedUICustomizations, updateManagedUICustomization,
+  listManagedUICustomizations, reorderManagedUICustomizations, replacePlatformUICustomizationFromImport,
+  setWorldPlatformUICustomizationEnabled, updateManagedUICustomization,
   type UICustomizationManageScope,
 } from '@/services/ui-customization/api'
 import {
@@ -37,13 +38,19 @@ const editorShow = ref(false)
 const editorSaving = ref(false)
 const editing = ref<UICustomizationPackage | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
+const replaceFileInput = ref<HTMLInputElement | null>(null)
+const replaceTargetId = ref('')
 const safeSession = ref(isUICustomizationSafeSession())
 
 const isWorld = computed(() => props.scope.type === 'world')
 const scopeKey = computed(() => props.scope.type === 'world' ? `world:${props.scope.worldId}` : 'platform')
 const worldJSAllowed = computed(() => !isWorld.value || !!policy.value?.allowWorldJs)
 const worldCSSAllowed = computed(() => !isWorld.value || policy.value?.allowWorldCss !== false)
-const userPackageCount = computed(() => packages.value.filter(pkg => !pkg.readonly).length)
+const isPlatformCatalog = (pkg: UICustomizationPackage) => isWorld.value && pkg.scopeType === 'platform'
+const isPackageEnabled = (pkg: UICustomizationPackage) => isPlatformCatalog(pkg) ? (pkg.enabled || !!pkg.worldEnabled) : pkg.enabled
+const isPackageJSAllowed = (pkg: UICustomizationPackage) => !isWorld.value || isPlatformCatalog(pkg) || worldJSAllowed.value
+const ownPackages = computed(() => packages.value.filter(pkg => !isPlatformCatalog(pkg)))
+const userPackageCount = computed(() => ownPackages.value.filter(pkg => !pkg.readonly).length)
 const full = computed(() => userPackageCount.value >= MAX_PACKAGES)
 
 const errorText = (error: any, fallback: string) => error?.response?.data?.message || error?.message || fallback
@@ -90,6 +97,10 @@ const openCreate = () => {
   editorShow.value = true
 }
 const openEdit = (pkg: UICustomizationPackage) => {
+  if (isPlatformCatalog(pkg)) {
+    message.info('这是平台提供的样式；世界只能引用或停用，内容由平台统一维护')
+    return
+  }
   if (pkg.readonly) {
     message.info('内置主题由服务器资源维护；如需修改，请先复制为自定义包')
     return
@@ -125,7 +136,13 @@ const handleSave = async (input: UICustomizationPackageInput) => {
 const toggleEnabled = async (pkg: UICustomizationPackage, enabled: boolean) => {
   busyId.value = pkg.id
   try {
-    replace(await updateManagedUICustomization(props.scope, pkg.id, { enabled }))
+    if (isPlatformCatalog(pkg)) {
+      if (props.scope.type !== 'world') return
+      await setWorldPlatformUICustomizationEnabled(props.scope.worldId, pkg.id, enabled)
+      packages.value = packages.value.map(item => item.id === pkg.id ? { ...item, worldEnabled: enabled } : item)
+    } else {
+      replace(await updateManagedUICustomization(props.scope, pkg.id, { enabled }))
+    }
     applied()
   } catch (error) {
     message.error(errorText(error, enabled ? '启用失败' : '停用失败'))
@@ -135,15 +152,16 @@ const toggleEnabled = async (pkg: UICustomizationPackage, enabled: boolean) => {
 }
 
 const move = async (index: number, delta: number) => {
+  if (isPlatformCatalog(packages.value[index])) return
   const target = index + delta
-  if (target < 0 || target >= packages.value.length || reordering.value) return
+  if (target < 0 || target >= packages.value.length || reordering.value || isPlatformCatalog(packages.value[target])) return
   const previous = packages.value
   const next = [...previous]
   ;[next[index], next[target]] = [next[target], next[index]]
   packages.value = next
   reordering.value = true
   try {
-    await reorderManagedUICustomizations(props.scope, next.map(p => p.id))
+    await reorderManagedUICustomizations(props.scope, next.filter(p => !isPlatformCatalog(p)).map(p => p.id))
     applied()
   } catch (error) {
     packages.value = previous
@@ -170,7 +188,7 @@ const duplicate = async (pkg: UICustomizationPackage) => {
     ordered.splice(index < 0 ? ordered.length : index + 1, 0, copy)
     packages.value = ordered
     if (ordered[ordered.length - 1].id !== copy.id) {
-      await reorderManagedUICustomizations(props.scope, ordered.map(p => p.id)).catch(() => load())
+      await reorderManagedUICustomizations(props.scope, ordered.filter(p => !isPlatformCatalog(p)).map(p => p.id)).catch(() => load())
     }
     message.success(dropJS ? '已复制为停用副本（平台未开放世界脚本，副本未包含 JavaScript）' : '已复制为停用副本')
   } catch (error) {
@@ -202,9 +220,10 @@ const remove = (pkg: UICustomizationPackage) => {
 
 const exportOne = (pkg: UICustomizationPackage) => downloadJSON(buildPackageDocument(pkg), transferFileName(pkg.name, 'package'))
 const exportAll = () => {
-  if (!packages.value.length) return
+  const exportPackages = isWorld.value ? ownPackages.value : packages.value
+  if (!exportPackages.length) return
   const name = props.exportName || (isWorld.value ? 'world' : 'platform')
-  downloadJSON(buildBundleDocument(packages.value), transferFileName(name, 'bundle'))
+  downloadJSON(buildBundleDocument(exportPackages), transferFileName(name, 'bundle'))
 }
 
 const handleImport = async (event: Event) => {
@@ -219,7 +238,9 @@ const handleImport = async (event: Event) => {
     const document = await readTransferFile(file)
     const created = await importManagedUICustomizations(scope, document)
     if (key !== scopeKey.value) return
-    packages.value = [...packages.value, ...created]
+    packages.value = isWorld.value
+      ? [...packages.value.filter(isPlatformCatalog), ...ownPackages.value, ...created]
+      : [...packages.value, ...created]
     message.success(`已导入 ${created.length} 个包（默认停用，检查内容后再启用）`)
   } catch (error) {
     message.error(`导入失败：${errorText(error, '未知错误')}`)
@@ -228,6 +249,39 @@ const handleImport = async (event: Event) => {
   }
 }
 
+const beginReplaceImport = (pkg: UICustomizationPackage) => {
+  if (isWorld.value || pkg.readonly) return
+  replaceTargetId.value = pkg.id
+  replaceFileInput.value?.click()
+}
+
+const handleReplaceImport = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  const id = replaceTargetId.value
+  replaceTargetId.value = ''
+  if (!file || !id) return
+  busyId.value = id
+  try {
+    const document = await readTransferFile(file)
+    replace(await replacePlatformUICustomizationFromImport(id, document))
+    message.success('已覆盖更新，引用该样式的世界会自动使用新内容')
+    applied()
+  } catch (error) {
+    message.error(`覆盖更新失败：${errorText(error, '未知错误')}`)
+  } finally {
+    busyId.value = ''
+  }
+}
+
+const platformMoreOptions = [
+  { label: '覆盖导入', key: 'replace-import' },
+  { label: '导出', key: 'export' },
+  { label: '复制', key: 'duplicate' },
+  { type: 'divider', key: 'd' },
+  { label: '删除', key: 'delete', props: { style: 'color: #dc2626' } },
+]
 const moreOptions = [
   { label: '导出', key: 'export' },
   { label: '复制', key: 'duplicate' },
@@ -236,6 +290,7 @@ const moreOptions = [
 ]
 const handleMore = (key: string, pkg: UICustomizationPackage) => {
   if (key === 'export') exportOne(pkg)
+  else if (key === 'replace-import') beginReplaceImport(pkg)
   else if (key === 'duplicate') void duplicate(pkg)
   else if (key === 'delete') remove(pkg)
 }
@@ -252,6 +307,7 @@ const sizeLabel = (text: string) => {
 <template>
   <div class="sc-uic-manager">
     <input ref="fileInput" type="file" accept=".json,application/json" class="sc-uic-manager__file" @change="handleImport">
+    <input ref="replaceFileInput" type="file" accept=".json,application/json" class="sc-uic-manager__file" @change="handleReplaceImport">
 
     <div class="sc-uic-manager__toolbar">
       <n-button type="primary" size="small" :disabled="full" @click="openCreate">
@@ -260,7 +316,7 @@ const sizeLabel = (text: string) => {
       <n-button secondary size="small" :loading="importing" :disabled="full" @click="fileInput?.click()">
         <template #icon><n-icon><Upload /></n-icon></template>导入
       </n-button>
-      <n-button secondary size="small" :disabled="!packages.length" @click="exportAll">
+      <n-button secondary size="small" :disabled="isWorld ? !ownPackages.length : !packages.length" @click="exportAll">
         <template #icon><n-icon><Download /></n-icon></template>导出全部
       </n-button>
       <span class="sc-uic-manager__count">{{ userPackageCount }}/{{ MAX_PACKAGES }} 自定义包</span>
@@ -294,14 +350,14 @@ const sizeLabel = (text: string) => {
         v-for="(pkg, index) in packages"
         :key="pkg.id"
         class="sc-uic-item"
-        :class="{ 'is-disabled': !pkg.enabled }"
+        :class="{ 'is-disabled': !isPackageEnabled(pkg) }"
       >
         <div class="sc-uic-item__order">
-          <n-button quaternary size="tiny" :disabled="index === 0 || reordering" aria-label="上移" @click="move(index, -1)">
+          <n-button quaternary size="tiny" :disabled="isPlatformCatalog(pkg) || index === 0 || reordering || isPlatformCatalog(packages[index - 1])" aria-label="上移" @click="move(index, -1)">
             <template #icon><n-icon><ChevronUp /></n-icon></template>
           </n-button>
           <span class="sc-uic-item__index">{{ index + 1 }}</span>
-          <n-button quaternary size="tiny" :disabled="index === packages.length - 1 || reordering" aria-label="下移" @click="move(index, 1)">
+          <n-button quaternary size="tiny" :disabled="isPlatformCatalog(pkg) || index === packages.length - 1 || reordering || isPlatformCatalog(packages[index + 1])" aria-label="下移" @click="move(index, 1)">
             <template #icon><n-icon><ChevronDown /></n-icon></template>
           </n-button>
         </div>
@@ -309,15 +365,18 @@ const sizeLabel = (text: string) => {
         <div class="sc-uic-item__main" @click="openEdit(pkg)">
           <div class="sc-uic-item__title">
             <span class="sc-uic-item__name">{{ pkg.name }}</span>
+            <n-tag v-if="isPlatformCatalog(pkg)" size="tiny" :bordered="false" type="success">
+              平台提供{{ pkg.enabled ? ' · 全局启用' : '' }}
+            </n-tag>
             <n-tag v-if="pkg.origin === 'builtin'" size="tiny" :bordered="false" type="info">内置 · {{ pkg.ref }}
             </n-tag>
             <span class="sc-uic-badge" :class="pkg.css ? 'is-css' : 'is-empty'">CSS{{ pkg.css ? ` · ${sizeLabel(pkg.css)}` : '' }}</span>
             <span
               v-if="pkg.js"
               class="sc-uic-badge"
-              :class="worldJSAllowed ? 'is-js' : 'is-blocked'"
-              :title="worldJSAllowed ? '' : '平台未开放世界脚本，脚本已保留但不会执行'"
-            >JS · {{ sizeLabel(pkg.js) }}{{ worldJSAllowed ? '' : ' · 未执行' }}</span>
+              :class="isPackageJSAllowed(pkg) ? 'is-js' : 'is-blocked'"
+              :title="isPackageJSAllowed(pkg) ? '' : '平台未开放世界脚本，脚本已保留但不会执行'"
+            >JS · {{ sizeLabel(pkg.js) }}{{ isPackageJSAllowed(pkg) ? '' : ' · 未执行' }}</span>
           </div>
           <div v-if="pkg.description" class="sc-uic-item__desc">{{ pkg.description }}</div>
           <div class="sc-uic-item__surfaces">
@@ -333,13 +392,14 @@ const sizeLabel = (text: string) => {
         <div class="sc-uic-item__actions">
           <n-switch
             size="small"
-            :value="pkg.enabled"
+            :value="isPackageEnabled(pkg)"
             :loading="busyId === pkg.id"
-            :aria-label="pkg.enabled ? '停用' : '启用'"
+            :disabled="isPlatformCatalog(pkg) && pkg.enabled"
+            :aria-label="isPackageEnabled(pkg) ? '停用' : '启用'"
             @update:value="(v: boolean) => toggleEnabled(pkg, v)"
           />
-          <n-button v-if="!pkg.readonly" size="small" secondary @click="openEdit(pkg)">编辑</n-button>
-          <n-dropdown trigger="click" :options="pkg.readonly ? [{ label: '复制', key: 'duplicate' }, { label: '导出', key: 'export' }] : moreOptions" @select="(key: string) => handleMore(key, pkg)">
+          <n-button v-if="!pkg.readonly && !isPlatformCatalog(pkg)" size="small" secondary @click="openEdit(pkg)">编辑</n-button>
+          <n-dropdown trigger="click" :options="isPlatformCatalog(pkg) ? [{ label: '导出', key: 'export' }] : (!isWorld && !pkg.readonly ? platformMoreOptions : (pkg.readonly ? [{ label: '复制', key: 'duplicate' }, { label: '导出', key: 'export' }] : moreOptions))" @select="(key: string) => handleMore(key, pkg)">
             <n-button size="small" quaternary aria-label="更多操作">
               <template #icon><n-icon><DotsVertical /></n-icon></template>
             </n-button>
