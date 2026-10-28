@@ -160,7 +160,7 @@ const avatarFallback = (name: string) => Array.from(name.trim() || '匿').slice(
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: 50%;
+  border-radius: var(--chat-avatar-radius, 0.85rem);
   color: var(--snapshot-primary-text);
   background: var(--snapshot-code-background);
   font-size: 10px;
