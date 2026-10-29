@@ -1069,51 +1069,16 @@
   display: none;
 }
 
-/* Drag source collapses completely - siblings fill the gap */
+/* Keep the source footprint stable while hit-testing the drop target. */
 .message-row--drag-source {
-  opacity: 0 !important;
+  opacity: 0.25 !important;
   pointer-events: none;
-  max-height: 0 !important;
-  overflow: hidden;
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
-  transition: max-height 0.2s cubic-bezier(0.33, 1, 0.68, 1),
-              margin 0.2s cubic-bezier(0.33, 1, 0.68, 1),
-              padding 0.2s cubic-bezier(0.33, 1, 0.68, 1),
-              opacity 0.15s ease-out;
+  transition: opacity 0.15s ease-out;
 }
 
-/* Slot-opening animation - messages slide to create space */
 .message-row {
   position: relative;
   contain: layout style;
-  transition: transform 0.18s cubic-bezier(0.33, 1, 0.68, 1);
-}
-
-/* When hovering over a drop target, shift it and all following rows down */
-.message-row--drop-before:not(.message-row--drag-source),
-.message-row--drop-before:not(.message-row--drag-source) ~ .message-row:not(.message-row--drag-source) {
-  transform: translateY(3rem);
-}
-
-/* When dropping after, only shift rows AFTER the target */
-.message-row--drop-after:not(.message-row--drag-source) ~ .message-row:not(.message-row--drag-source) {
-  transform: translateY(3rem);
-}
-
-/* Fill the slot gap with tone-matched background color */
-.message-row--tone-ic {
-  --message-drop-gap-bg: var(--chat-ic-bg);
-}
-
-.message-row--tone-ooc {
-  --message-drop-gap-bg: var(--chat-ooc-bg);
-}
-
-.message-row--tone-archived {
-  --message-drop-gap-bg: rgba(148, 163, 184, 0.2);
 }
 
 .message-row--drop-before:not(.message-row--drag-source)::before,
@@ -1122,9 +1087,9 @@
   position: absolute;
   left: 0;
   right: 0;
-  height: 3rem;
-  background-color: var(--message-drop-gap-bg, var(--chat-ic-bg));
-  z-index: -1;
+  height: 3px;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .message-row--drop-before:not(.message-row--drag-source)::before {

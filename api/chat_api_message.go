@@ -230,7 +230,7 @@ func isUniqueConstraintError(err error) bool {
 	return false
 }
 
-func resolveMessageDisplayOrderForPlacement(db *gorm.DB, channelID string, placement messageOrderPlacement, currentMessageID string, fallback float64) (float64, error) {
+func resolveMessageDisplayOrderForPlacement(db *gorm.DB, channelID string, placement messageOrderPlacement, currentMessageID string, fallback float64, reset *bool) (float64, error) {
 	beforeID := strings.TrimSpace(placement.BeforeID)
 	afterID := strings.TrimSpace(placement.AfterID)
 	currentMessageID = strings.TrimSpace(currentMessageID)
@@ -269,10 +269,11 @@ func resolveMessageDisplayOrderForPlacement(db *gorm.DB, channelID string, place
 	newOrder := fallback
 	switch {
 	case beforeMsg.ID != "" && afterMsg.ID != "":
-		if beforeMsg.DisplayOrder <= afterMsg.DisplayOrder+displayOrderEpsilon {
+		if !hasDisplayOrderSpace(afterMsg.DisplayOrder, beforeMsg.DisplayOrder, 1) {
 			if err := model.RebalanceChannelDisplayOrderTx(db, channelID); err != nil {
 				return 0, err
 			}
+			*reset = true
 			if err := loadNeighbor(beforeID, &beforeMsg); err != nil {
 				return 0, err
 			}
@@ -283,7 +284,10 @@ func resolveMessageDisplayOrderForPlacement(db *gorm.DB, channelID string, place
 		if beforeMsg.ID == "" || afterMsg.ID == "" {
 			return 0, fmt.Errorf("无法获取目标位置的邻居消息")
 		}
-		newOrder = (beforeMsg.DisplayOrder + afterMsg.DisplayOrder) / 2
+		newOrder = afterMsg.DisplayOrder + (beforeMsg.DisplayOrder-afterMsg.DisplayOrder)/2
+		if !(newOrder > afterMsg.DisplayOrder && newOrder < beforeMsg.DisplayOrder) {
+			return 0, fmt.Errorf("目标位置已变化，请重试")
+		}
 	case beforeMsg.ID != "":
 		newOrder = beforeMsg.DisplayOrder - displayOrderGap/2
 	case afterMsg.ID != "":
@@ -2431,10 +2435,14 @@ func apiMessageCreate(ctx *ChatContext, data *struct {
 	messageSortBasis := service.ResolveMessageSortBasisForChannel(channel)
 	hasPlacement := strings.TrimSpace(data.BeforeID) != "" || strings.TrimSpace(data.AfterID) != ""
 	if !hasExplicitDisplayOrder && hasPlacement {
+		reset := false
 		resolvedOrder, err := resolveMessageDisplayOrderForPlacement(db, channelId, messageOrderPlacement{
 			BeforeID: data.BeforeID,
 			AfterID:  data.AfterID,
-		}, "", displayOrder)
+		}, "", displayOrder, &reset)
+		if reset {
+			broadcastDisplayOrderReset(ctx, channelId)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -3760,11 +3768,12 @@ func apiMessageReorder(ctx *ChatContext, data *struct {
 		return nil, fmt.Errorf("缺少目标位置参数")
 	}
 
+	reset := false
 	err = db.Transaction(func(tx *gorm.DB) error {
 		if err := model.MessageUpdateTx(tx, msg.ID, data.ExpectedVersion, map[string]any{"updated_at": time.Now()}); err != nil {
 			return err
 		}
-		newOrder, err := resolveMessageDisplayOrderForPlacement(tx, data.ChannelID, messageOrderPlacement{BeforeID: data.BeforeID, AfterID: data.AfterID}, data.MessageID, msg.DisplayOrder)
+		newOrder, err := resolveMessageDisplayOrderForPlacement(tx, data.ChannelID, messageOrderPlacement{BeforeID: data.BeforeID, AfterID: data.AfterID}, data.MessageID, msg.DisplayOrder, &reset)
 		if err != nil {
 			return err
 		}
@@ -3774,12 +3783,15 @@ func apiMessageReorder(ctx *ChatContext, data *struct {
 		if err := tx.Where("id = ?", msg.ID).Take(&msg).Error; err != nil {
 			return err
 		}
-		return service.RecordMessageOperation(tx, ctx.User.ID, data.ClientOpID, opHash, map[string]any{"message_id": msg.ID, "channel_id": data.ChannelID, "display_order": msg.DisplayOrder, "version": msg.Version})
+		return service.RecordMessageOperation(tx, ctx.User.ID, data.ClientOpID, opHash, map[string]any{"message_id": msg.ID, "channel_id": data.ChannelID, "display_order": msg.DisplayOrder, "version": msg.Version, "reset": reset})
 	})
 	if err != nil {
 		return nil, err
 	}
 	_ = service.SyncBattleReportOrderFromDisplayMessage(data.ChannelID)
+	if reset && msg.IsWhisper {
+		broadcastDisplayOrderReset(ctx, data.ChannelID)
+	}
 
 	if msg.WhisperTo != "" && msg.WhisperTarget == nil {
 		msg.WhisperTarget = loadWhisperTargetForChannel(data.ChannelID, msg.WhisperTo)
@@ -3809,6 +3821,7 @@ func apiMessageReorder(ctx *ChatContext, data *struct {
 		User:     operatorData,
 		Operator: operatorData,
 		Reorder: &protocol.MessageReorder{
+			Reset:        reset,
 			MessageID:    msg.ID,
 			ChannelID:    data.ChannelID,
 			DisplayOrder: msg.DisplayOrder,
@@ -3838,10 +3851,12 @@ func apiMessageReorder(ctx *ChatContext, data *struct {
 		MessageID    string  `json:"message_id"`
 		ChannelID    string  `json:"channel_id"`
 		DisplayOrder float64 `json:"display_order"`
+		Reset        bool    `json:"reset,omitempty"`
 	}{
 		MessageID:    msg.ID,
 		ChannelID:    data.ChannelID,
 		DisplayOrder: msg.DisplayOrder,
+		Reset:        reset,
 	}, nil
 }
 
@@ -4134,6 +4149,7 @@ func apiMessageRelocateBatch(ctx *ChatContext, data *struct {
 	}
 	targetIDs := lo.Map(groups, func(group messageRelocateGroup, _ int) string { return group.TargetMessageID })
 	results := make([]reorderResult, 0, len(ids))
+	reset := false
 	err = db.Transaction(func(tx *gorm.DB) error {
 		loadMessages := func() ([]model.MessageModel, error) {
 			var messages []model.MessageModel
@@ -4197,10 +4213,11 @@ func apiMessageRelocateBatch(ctx *ChatContext, data *struct {
 				if gap+1 < len(remaining) {
 					s.upper, s.hasUpper = remaining[gap+1].DisplayOrder, true
 				}
-				if s.hasLower && s.hasUpper && s.upper <= s.lower+displayOrderEpsilon*float64(len(selected[gi])+1) {
+				if s.hasLower && s.hasUpper && !hasDisplayOrderSpace(s.lower, s.upper, len(selected[gi])) {
 					if err := model.RebalanceChannelDisplayOrderTx(tx, channelID); err != nil {
 						return err
 					}
+					reset = true
 					return fmt.Errorf("__sealchat_retry_relocate__")
 				}
 				slots[gi] = s
@@ -4276,6 +4293,9 @@ func apiMessageRelocateBatch(ctx *ChatContext, data *struct {
 		return nil, err
 	}
 
+	if reset {
+		broadcastDisplayOrderReset(ctx, channelID)
+	}
 	channelData := channel.ToProtocolType()
 	operatorData := ctx.User.ToProtocolType()
 	for _, result := range results {

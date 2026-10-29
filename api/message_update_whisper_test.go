@@ -52,7 +52,7 @@ func TestTagCheckPersistsMentionsAndWatermarks(t *testing.T) {
 			StringPKBaseModel: model.StringPKBaseModel{ID: "mention-direct-message", CreatedAt: time.UnixMilli(200)},
 			ChannelID:         channelID, UserID: "mention-direct-sender", Content: `<at id="mention-direct-target"/>`,
 		}
-		if err := (&ChatContext{}).TagCheck(message); err != nil {
+		if err := (&ChatContext{}).TagCheck(message, collectMentionTargetIDsFromContent(message.Content)); err != nil {
 			t.Fatal(err)
 		}
 		requireMentionWatermarkForTest(t, channelID, "mention-direct-target", 200)
@@ -77,7 +77,7 @@ func TestTagCheckPersistsMentionsAndWatermarks(t *testing.T) {
 			StringPKBaseModel: model.StringPKBaseModel{ID: "mention-all-message", CreatedAt: time.UnixMilli(200)},
 			ChannelID:         channelID, UserID: "mention-all-sender", Content: `<at id="all"/>`,
 		}
-		if err := (&ChatContext{}).TagCheck(message); err != nil {
+		if err := (&ChatContext{}).TagCheck(message, collectMentionTargetIDsFromContent(message.Content)); err != nil {
 			t.Fatal(err)
 		}
 		requireMentionWatermarkForTest(t, channelID, "mention-all-a", 200)
@@ -99,7 +99,7 @@ func TestTagCheckPersistsMentionsAndWatermarks(t *testing.T) {
 		if err := model.CreateWhisperRecipients(message.ID, []string{"mention-whisper-visible"}); err != nil {
 			t.Fatal(err)
 		}
-		if err := (&ChatContext{}).TagCheck(message); err != nil {
+		if err := (&ChatContext{}).TagCheck(message, collectMentionTargetIDsFromContent(message.Content)); err != nil {
 			t.Fatal(err)
 		}
 		requireMentionWatermarkForTest(t, channelID, "mention-whisper-visible", 200)
@@ -117,7 +117,7 @@ func TestTagCheckPersistsMentionsAndWatermarks(t *testing.T) {
 			ChannelID:         channelID, UserID: "mention-whisper-all-sender", IsWhisper: true,
 			WhisperTo: "mention-whisper-all-a, mention-whisper-all-b", Content: `<at id="all"/>`,
 		}
-		if err := (&ChatContext{}).TagCheck(message); err != nil {
+		if err := (&ChatContext{}).TagCheck(message, collectMentionTargetIDsFromContent(message.Content)); err != nil {
 			t.Fatal(err)
 		}
 		requireMentionWatermarkForTest(t, channelID, "mention-whisper-all-a", 200)
@@ -138,7 +138,7 @@ func TestTagCheckPersistsMentionsAndWatermarks(t *testing.T) {
 			StringPKBaseModel: model.StringPKBaseModel{ID: "mention-rollback-message", CreatedAt: time.UnixMilli(200)},
 			ChannelID:         "mention-rollback-channel", UserID: "mention-rollback-sender", Content: `<at id="mention-rollback-target"/>`,
 		}
-		if err := (&ChatContext{}).TagCheck(message); err == nil {
+		if err := (&ChatContext{}).TagCheck(message, collectMentionTargetIDsFromContent(message.Content)); err == nil {
 			t.Fatal("TagCheck succeeded after channel_latest_read was removed")
 		}
 		var count int64

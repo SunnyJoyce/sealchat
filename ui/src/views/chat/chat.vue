@@ -7711,7 +7711,7 @@ const visibleRowEntries = computed<VisibleRowEntry[]>(() => {
     return {
       message,
       mergedWithPrev: merged,
-      entryKey: `${idPart}-${index}-${merged ? 1 : 0}`,
+      entryKey: idPart,
     };
   });
 });
@@ -8910,7 +8910,6 @@ watch(
 );
 
 const dragState = reactive({
-  snapshot: [] as Message[],
   clientOpId: null as string | null,
   overId: null as string | null,
   position: null as 'before' | 'after' | null,
@@ -9077,7 +9076,6 @@ const resetDragState = () => {
     cancelAnimationFrame(dragState.dragRafId);
     dragState.dragRafId = null;
   }
-  dragState.snapshot = [];
   dragState.clientOpId = null;
   dragState.overId = null;
   dragState.position = null;
@@ -9532,15 +9530,7 @@ const detachDragListeners = () => {
   dragState.handleEl?.removeEventListener('lostpointercapture', onDragHandleLostPointerCapture);
 };
 
-const restoreMessageOrderFromSnapshot = (messageId: string, snapshot: Message[]) => {
-  if (!messageId || snapshot.length === 0) {
-    return;
-  }
-  const source = snapshot.find((item) => item.id === messageId);
-  if (!source) {
-    return;
-  }
-  const previousOrder = getMessageDisplayOrderValue(source);
+const restoreMessageDisplayOrder = (messageId: string, previousOrder: number | null) => {
   const index = rows.value.findIndex((item) => item.id === messageId);
   if (index < 0) {
     return;
@@ -9569,7 +9559,6 @@ const finalizeDrag = async () => {
   const activeId = dragState.activeId;
   const overId = dragState.overId;
   const position = dragState.position;
-  const originalRows = dragState.snapshot.slice();
 
   detachDragListeners();
 
@@ -9582,7 +9571,8 @@ const finalizeDrag = async () => {
     return;
   }
 
-  const working = originalRows.slice();
+  // History/realtime loading may have added messages since pointerdown.
+  const working = rows.value.slice();
   const fromIndex = working.findIndex((item) => item.id === activeId);
   const toReference = working.findIndex((item) => item.id === overId);
   if (fromIndex < 0 || toReference < 0) {
@@ -9591,6 +9581,8 @@ const finalizeDrag = async () => {
   }
 
   const [moving] = working.splice(fromIndex, 1);
+  const previousOrder = getMessageDisplayOrderValue(moving);
+  const restoreReadingPosition = captureMessageReadingPosition(activeId);
   const adjustedReferenceIndex = toReference - (fromIndex < toReference ? 1 : 0);
   let targetIndex = adjustedReferenceIndex + (position === 'after' ? 1 : 0);
   if (targetIndex < 0) {
@@ -9610,8 +9602,10 @@ const finalizeDrag = async () => {
 
   const beforeId = working[targetIndex + 1]?.id || '';
   const afterId = working[targetIndex - 1]?.id || '';
+  const orderRevision = displayOrderRevision;
   const clientOpId = dragState.clientOpId || nanoid();
   resetDragState();
+  void nextTick(restoreReadingPosition);
   localReorderOps.add(clientOpId);
   try {
     const resp = await chat.messageReorder(channelId, {
@@ -9620,14 +9614,24 @@ const finalizeDrag = async () => {
       afterId,
       clientOpId,
     });
-    if (resp?.display_order !== undefined) {
-      (moving as any).displayOrder = Number(resp.display_order);
-      sortRowsByDisplayOrder();
+    if (chat.curChannel?.id !== channelId || !localReorderOps.has(clientOpId)) return;
+    if (resp?.reset) {
+      await refreshLoadedDisplayOrders();
+    } else if (resp?.display_order !== undefined) {
+      applyReorderPayload({ messageId: activeId, displayOrder: resp.display_order });
     }
     chatEvent.emit('battle-report-display-message-reordered' as any, { channelId });
   } catch (error) {
-    restoreMessageOrderFromSnapshot(activeId, originalRows);
-    message.error('消息排序失败，请稍后重试');
+    if (chat.curChannel?.id === channelId && localReorderOps.has(clientOpId)) {
+      if (displayOrderRevision === orderRevision) {
+        const restore = captureMessageReadingPosition(activeId);
+        restoreMessageDisplayOrder(activeId, previousOrder);
+        void nextTick(restore);
+      } else {
+        void refreshLoadedDisplayOrders();
+      }
+      message.error('消息排序失败，请稍后重试');
+    }
   } finally {
     localReorderOps.delete(clientOpId);
   }
@@ -9662,6 +9666,10 @@ const onDragPointerUp = (event: PointerEvent) => {
     return;
   }
   event.preventDefault();
+  // pointerup can precede the RAF scheduled by the last pointermove.
+  dragState.pendingClientY = event.clientY;
+  if (dragState.dragRafId !== null) cancelAnimationFrame(dragState.dragRafId);
+  processDragFrame();
   finalizeDrag();
 };
 
@@ -9706,7 +9714,6 @@ const startMessageDrag = ({
       // ignore capture failure
     }
   }
-  dragState.snapshot = rows.value.slice();
   dragState.clientOpId = nanoid();
   dragState.activeId = item.id;
   dragState.pointerId = pointerId;
@@ -9833,7 +9840,94 @@ const onDragHandlePointerDown = (event: PointerEvent, item: Message) => {
   event.preventDefault();
 };
 
+const captureMessageReadingPosition = (excludeId?: string): (() => void) => {
+  const channelId = chat.curChannel?.id;
+  const container = messagesListRef.value;
+  if (!container) return () => {};
+  const bounds = container.getBoundingClientRect();
+  const anchor = visibleRows.value.find((item) => {
+    if (!item.id || item.id === excludeId) return false;
+    const rect = messageRowRefs.get(item.id)?.getBoundingClientRect();
+    return rect && rect.bottom > bounds.top && rect.top < bounds.bottom;
+  });
+  const anchorTop = anchor?.id ? messageRowRefs.get(anchor.id)?.getBoundingClientRect().top : undefined;
+  return () => {
+    if (chat.curChannel?.id !== channelId || messagesListRef.value !== container || anchorTop === undefined || !anchor?.id) return;
+    const currentTop = messageRowRefs.get(anchor.id)?.getBoundingClientRect().top;
+    if (currentTop !== undefined) container.scrollTop += currentTop - anchorTop;
+  };
+};
+
+let displayOrderRevision = 0;
+let displayOrderRefresh: { channelId: string; promise: Promise<void> } | null = null;
+let displayOrderDirty = false;
+
+const invalidateDisplayOrderRefresh = () => {
+  displayOrderRevision += 1;
+  displayOrderRefresh = null;
+  displayOrderDirty = false;
+  localReorderOps.clear();
+};
+
+const refreshLoadedDisplayOrders = (): Promise<void> => {
+  const channelId = chat.curChannel?.id;
+  if (!channelId) return Promise.resolve();
+  if (displayOrderRefresh?.channelId === channelId) return displayOrderRefresh.promise;
+  displayOrderRevision += 1;
+  displayOrderDirty = true;
+  const task = { channelId, promise: Promise.resolve() };
+  displayOrderRefresh = task;
+  task.promise = (async () => {
+    for (;;) {
+      if (chat.curChannel?.id !== channelId || displayOrderRefresh !== task) return;
+      const revision = displayOrderRevision;
+      const ids = [...rows.value, ...pinnedRows.value].map((item) => item.id).filter((id): id is string => Boolean(id));
+      if (!ids.length) {
+        displayOrderDirty = false;
+        return;
+      }
+      const orders = await chat.messageDisplayOrders(channelId, ids);
+      if (chat.curChannel?.id !== channelId || displayOrderRefresh !== task) return;
+      if (revision !== displayOrderRevision) continue;
+      const requestedIds = new Set(ids);
+      if ([...rows.value, ...pinnedRows.value].some((item) => item.id && !requestedIds.has(item.id))) continue;
+      const restore = captureMessageReadingPosition();
+      const byId = new Map(orders.map((item) => [item.id, item.display_order] as const));
+      for (const item of [...rows.value, ...pinnedRows.value]) {
+        const order = byId.get(item.id || '');
+        if (typeof order === 'number' && Number.isFinite(order)) {
+          (item as any).displayOrder = order;
+          (item as any).display_order = order;
+        }
+      }
+      sortRowsByDisplayOrder();
+      updateWindowAnchorsFromRows();
+      if (rows.value.length && !messageWindow.hasReachedStart) {
+        messageWindow.beforeCursor = buildMessageCursor(rows.value[0] as any);
+        if (isSearchBrowseActive()) searchBrowseSession.beforeCursor = messageWindow.beforeCursor;
+      }
+      await nextTick();
+      restore();
+      if (revision === displayOrderRevision) {
+        displayOrderDirty = false;
+        return;
+      }
+    }
+  })().catch((error) => {
+    console.warn('Failed to refresh message display orders', error);
+    if (displayOrderRefresh === task) message.error('消息顺序同步失败，请稍后重试');
+  }).finally(() => {
+    if (displayOrderRefresh === task) displayOrderRefresh = null;
+  });
+  return task.promise;
+};
+
 const applyReorderPayload = (payload: any) => {
+  if (payload?.reset || displayOrderDirty) {
+    displayOrderRevision += 1;
+    void refreshLoadedDisplayOrders();
+    return;
+  }
   if (!payload?.messageId) {
     return;
   }
@@ -9847,7 +9941,9 @@ const applyReorderPayload = (payload: any) => {
       (target as any).displayOrder = parsed;
     }
   }
+  const restore = captureMessageReadingPosition(payload.messageId);
   sortRowsByDisplayOrder();
+  void nextTick(restore);
 };
 
 function handleBattleReportDisplayRefresh(payload: any) {
@@ -14121,6 +14217,7 @@ let firstLoad = false;
 let disposeChatMessageHandlers: (() => void) | null = null;
 const handleChannelSwitchEvent = (e: any) => {
   if (!firstLoad) return;
+  invalidateDisplayOrderRefresh();
   const payload = (e as any)?.argv || {};
   const isReenter = !!payload?.reenter;
   persistOwnedSessionDraft();
@@ -14138,7 +14235,6 @@ const handleChannelSwitchEvent = (e: any) => {
   chat.clearMessageInsertTarget();
   chat.cancelMultiSelectRelocate();
   resetDragState();
-  localReorderOps.clear();
   showButton.value = false;
   // 具体不知道原因，但是必须在这个位置reset才行
   // virtualListRef.value?.reset();
@@ -14154,6 +14250,7 @@ const handleChannelSwitchEvent = (e: any) => {
 };
 
 const handleChannelContextCleared = () => {
+  invalidateDisplayOrderRefresh();
   persistOwnedSessionDraft();
   stopTypingPreviewNow();
   resetTypingPreview();
@@ -14167,7 +14264,6 @@ const handleChannelContextCleared = () => {
   chat.clearMessageInsertTarget();
   chat.cancelMultiSelectRelocate();
   resetDragState();
-  localReorderOps.clear();
   showButton.value = false;
 };
 
@@ -14890,6 +14986,7 @@ chatEvent.on('channel-presence-updated', (e?: Event) => {
 })
 
 onBeforeUnmount(() => {
+  invalidateDisplayOrderRefresh();
   disposeChatMessageHandlers?.();
   disposeChatMessageHandlers = null;
   if (typeof document !== 'undefined') {
@@ -15134,7 +15231,11 @@ const loadOlderMessagesByWindow = async () => {
 };
 
 const loadOlderMessages = async () => {
-  if (!chat.curChannel?.id || messageWindow.loadingBefore || messageWindow.hasReachedStart) {
+  if (!chat.curChannel?.id || messageWindow.loadingBefore || messageWindow.hasReachedStart || displayOrderRefresh?.channelId === chat.curChannel?.id) {
+    return false;
+  }
+  if (displayOrderDirty) {
+    void refreshLoadedDisplayOrders();
     return false;
   }
   if (isSearchBrowseActive() && !searchBrowseSession.hasMoreBefore && !messageWindow.beforeCursor) {
@@ -15142,6 +15243,8 @@ const loadOlderMessages = async () => {
     messageWindow.beforeCursorExhausted = true;
     return false;
   }
+  const channelIdAtStart = chat.curChannel.id;
+  const orderRevisionAtStart = displayOrderRevision;
   messageWindow.loadingBefore = true;
   try {
     const container = messagesListRef.value;
@@ -15167,6 +15270,7 @@ const loadOlderMessages = async () => {
       nextCursor = '';
     }
 
+    if (chat.curChannel?.id !== channelIdAtStart || displayOrderRevision !== orderRevisionAtStart) return false;
     if (nextCursor !== undefined) {
       applyCursorUpdate({ before: nextCursor ?? '' });
       if (isSearchBrowseActive()) {
@@ -15207,8 +15311,13 @@ const loadNewerMessages = async (
   if (
     !chat.curChannel?.id ||
     messageWindow.loadingAfter ||
-    messageWindow.hasReachedLatest
+    messageWindow.hasReachedLatest ||
+    displayOrderRefresh?.channelId === chat.curChannel.id
   ) {
+    return false;
+  }
+  if (displayOrderDirty) {
+    void refreshLoadedDisplayOrders();
     return false;
   }
   if (!messageWindow.afterCursor) {
@@ -15220,6 +15329,7 @@ const loadNewerMessages = async (
   }
   const channelIdAtStart = chat.curChannel.id;
   const afterCursorAtStart = messageWindow.afterCursor;
+  const orderRevisionAtStart = displayOrderRevision;
   const realtimeRevisionAtStart = detachedRealtimeRevision;
   let retryAfterRealtimeRace = false;
   messageWindow.loadingAfter = true;
@@ -15231,6 +15341,7 @@ const loadNewerMessages = async (
     });
     if (
       chat.curChannel?.id !== channelIdAtStart
+      || displayOrderRevision !== orderRevisionAtStart
       || !historyLocked.value
       || messageWindow.afterCursor !== afterCursorAtStart
     ) {

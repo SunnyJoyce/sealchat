@@ -383,6 +383,8 @@ type WhisperMeta struct {
 }
 
 type MessageReorder struct {
+	// Reset invalidates all cached orders after a channel-wide rebalance.
+	Reset        bool    `json:"reset,omitempty"`
 	MessageID    string  `json:"messageId"`
 	ChannelID    string  `json:"channelId"`
 	DisplayOrder float64 `json:"displayOrder"`

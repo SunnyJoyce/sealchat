@@ -4929,6 +4929,20 @@ export const useChatStore = defineStore({
       this.messageReactionLoaded[event.messageId] = true;
     },
 
+    async messageDisplayOrders(channelId: string, messageIds: string[]): Promise<Array<{ id: string; display_order: number }>> {
+      const ids = Array.from(new Set(messageIds.filter(Boolean)));
+      const orders: Array<{ id: string; display_order: number }> = [];
+      for (let offset = 0; offset < ids.length; offset += 200) {
+        const resp = await this.sendAPI<{ data: Array<{ id: string; display_order: number }> }>('message.order.get', {
+          channel_id: channelId,
+          message_ids: ids.slice(offset, offset + 200),
+        } as APIMessage);
+        if (!Array.isArray(resp.data)) throw new Error('Failed to refresh message display orders');
+        orders.push(...resp.data);
+      }
+      return orders;
+    },
+
     async messageReorder(channel_id: string, payload: { messageId: string; beforeId?: string; afterId?: string; clientOpId?: string }) {
       const resp = await this.sendAPI('message.reorder', {
         channel_id,

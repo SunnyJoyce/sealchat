@@ -202,6 +202,8 @@ Before modifying a WebSocket event:
 
 Do not rename events as part of cleanup.
 
+Channel display-order rebalancing broadcasts `message-reordered` with `reorder.reset=true` after commit (immediately after the existing nontransactional insertion rebalance). Reuse the public reorder event; for whispers, send a separate channel invalidation without message IDs or content. Clients read their loaded IDs through the read-only `message.order.get` action, limited to 200 IDs per request and the normal channel/whisper access rules.
+
 Do not reorder persistence and broadcast side effects without understanding the current delivery guarantees.
 
 Transport code should not create duplicate broadcasts for a single successful business operation.
@@ -312,6 +314,8 @@ go test ./...
 ```
 
 Do not claim an endpoint was manually verified unless an actual HTTP/WebSocket flow was exercised.
+
+New `*_test.go` files are currently ignored by the repository's `.gitignore`; explicitly include intended regression tests in the commit.
 
 ## Diff Review
 

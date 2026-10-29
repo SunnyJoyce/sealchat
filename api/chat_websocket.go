@@ -967,11 +967,12 @@ func websocketWorks(app *fiber.App, webUrl string, outboundQueueSize int) {
 		"channel.member.list.online": {},
 		"message.list":               {},
 		"message.get":                {},
+		"message.order.get":          {},
 		"message.first":              {},
 		"message.context":            {},
-		"avatar.card.settings.get":    {},
-		"world.character_state.list":  {},
-		"character.snapshot.list":     {},
+		"avatar.card.settings.get":   {},
+		"world.character_state.list": {},
+		"character.snapshot.list":    {},
 		"theater.subscribe":          {},
 		"theater.unsubscribe":        {},
 	}
@@ -1736,6 +1737,9 @@ func websocketWorks(app *fiber.App, webUrl string, outboundQueueSize int) {
 						solved = true
 					case "message.get":
 						apiWrap(ctx, msg, apiMessageGet)
+						solved = true
+					case "message.order.get":
+						apiWrap(ctx, msg, apiMessageOrderGet)
 						solved = true
 					case "message.first":
 						apiWrap(ctx, msg, apiMessageFirst)
