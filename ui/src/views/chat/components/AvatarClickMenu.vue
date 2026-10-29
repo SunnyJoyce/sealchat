@@ -35,10 +35,10 @@ const emit = defineEmits<{
 const avatarMenuClass = computed(() => (display.palette === 'night' ? 'avatar-menu--night' : 'avatar-menu--day'))
 const avatarMenuTheme = computed(() => (display.palette === 'night' ? 'default dark' : 'default'))
 const avatarMenuOptions = computed<MenuOptions>(() => ({
-  ...chat.avatarMenu.optionsComponent,
+  ...(chat.avatarMenu.optionsComponent as MenuOptions),
   theme: avatarMenuTheme.value,
   customClass: `sc-overlay sc-context-menu sc-avatar-context-menu ${avatarMenuClass.value}`,
-  adjustPosition: { xDirection: 'right', yDirection: 'top' },
+  adjustPosition: true,
 }))
 
 const isSelf = computed(() => {

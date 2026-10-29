@@ -383,7 +383,10 @@ const includeOutsideFilter = computed({
 })
 
 const timeRangeFilter = computed({
-  get: () => filters.value.timeRange,
+  get: (): [number, number] | null => {
+    const range = filters.value.timeRange
+    return range && range[0] !== null && range[1] !== null ? [range[0], range[1]] : null
+  },
   set: (val: [number, number] | null) => channelSearch.updateFilters({ timeRange: val }),
 })
 

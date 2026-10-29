@@ -423,7 +423,7 @@ async function handleRemoteRevision(revision: number) {
 type ClueRevisionPayload = { worldId?: string; clueId?: string; action?: string; revision?: number }
 function handleClueChanged(event: { worldClue?: ClueRevisionPayload; argv?: { options?: ClueRevisionPayload; Options?: ClueRevisionPayload } }) {
 	const payload = event?.worldClue || event?.argv?.options || event?.argv?.Options
-	if (payload?.worldId !== props.worldId || payload?.clueId !== workingClue.value?.id) return
+	if (!workingClue.value || payload?.worldId !== props.worldId || payload?.clueId !== workingClue.value.id) return
 	if (payload.action === 'edit-lock') {
 		void store.loadEditLocks(props.worldId, workingClue.value.id).catch(() => undefined)
 		return

@@ -1890,13 +1890,14 @@ const handleCreateCard = async () => {
     if (!created?.id) {
       throw new Error('人物卡创建失败');
     }
+    const createdCardId = created.id;
     const setupTasks: Array<{ label: string; task: Promise<unknown> }> = [];
     if (newCardTemplateId.value && newCardTemplateId.value !== DETACHED_TEMPLATE_VALUE) {
       setupTasks.push({
         label: '模板应用',
         task: templateStore.bindCardToTemplate({
           channelId: resolvedChannelId.value,
-          externalCardId: created.id,
+          externalCardId: createdCardId,
           cardName: created.name || newCardName.value.trim(),
           sheetType: created.sheetType || sheetType,
           templateId: newCardTemplateId.value,
@@ -1907,7 +1908,7 @@ const handleCreateCard = async () => {
         label: '模板应用',
         task: templateStore.bindCardToDetachedTemplate({
           channelId: resolvedChannelId.value,
-          externalCardId: created.id,
+          externalCardId: createdCardId,
           cardName: created.name || newCardName.value.trim(),
           sheetType: created.sheetType || sheetType,
           templateSnapshot: sheetStore.getDefaultTemplate(sheetType),
@@ -1925,7 +1926,7 @@ const handleCreateCard = async () => {
           });
           return avatarStore.upsertBinding({
             channelId: resolvedChannelId.value,
-            externalCardId: created.id,
+            externalCardId: createdCardId,
             cardName: created.name || newCardName.value.trim(),
             sheetType: created.sheetType || sheetType,
             avatarAttachmentId: uploadResult.attachmentId,

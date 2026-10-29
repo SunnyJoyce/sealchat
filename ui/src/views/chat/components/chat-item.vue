@@ -84,7 +84,6 @@ type EditingPreviewInfo = {
   isSelf: boolean;
   isTemporary?: boolean;
   avatarTextStyle?: '' | 'a' | 'b' | 'c';
-  color?: string;
   summary: string;
   previewHtml: string;
   tone: 'ic' | 'ooc';

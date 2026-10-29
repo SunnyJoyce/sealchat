@@ -18,9 +18,22 @@ export interface WhisperMeta {
 
 declare module '@satorijs/protocol' {
   interface User {
-    avatarDecoration?: AvatarDecoration;
+    avatarDecoration?: AvatarDecoration | null;
+    is_bot?: boolean;
+  }
+  interface GuildMember {
+    id?: string;
   }
   interface Message {
+    isWhisper?: boolean;
+    identity?: MessageIdentity;
+    displayOrder?: number;
+    display_order?: number;
+    isArchived?: boolean;
+    is_archived?: boolean;
+    archivedAt?: number;
+    icMode?: 'ic' | 'ooc';
+    ic_mode?: 'ic' | 'ooc';
     tts?: import('@/features/tts/types').MessageSpeech | null;
     _ttsAutoRequested?: boolean;
     _ttsQuickOverride?: import('@/features/tts/types').TTSQuickOverride;
@@ -46,6 +59,9 @@ declare module '@satorijs/protocol' {
     botWhisperForwardConfig?: string;
     characterApiEnabled?: boolean;
     characterApiReason?: string;
+  }
+  interface Event {
+    presence?: Array<{ user?: User | null; latency?: number; focused?: boolean; lastSeen?: number }>;
   }
 }
 
@@ -838,6 +854,7 @@ export interface AdminUpdateOverview {
 }
 
 export interface UserInfo {
+  name?: string;
   id: string;
   createdAt: null | string;
   updatedAt: null | string;
@@ -1007,6 +1024,7 @@ interface APIChannelList {
 
 
 export interface APIChannelCreateResp {
+  err?: string;
   id: string
   name: string
   parent_id: string

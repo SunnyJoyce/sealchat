@@ -452,9 +452,15 @@ func TestBroadcastEventInChannelForBotSkipsDuplicateWriteForWhisperTarget(t *tes
 	nonWhisperMessage.WhisperTo = nil
 	nonWhisperEvent.Message = &nonWhisperMessage
 	m.ResetMessagePipeline()
+	// A WebSocket read timeout is terminal; use a fresh reader for the next assertion.
+	nextConn, nextClient, nextCleanup := newReadableChatTestConn(t)
+	defer nextCleanup()
+	targetMap.Delete(targetConn)
+	targetInfo.Conn = nextConn
+	targetMap.Store(nextConn, targetInfo)
 	ctx.BroadcastEventInChannelForBot(channel.ID, &nonWhisperEvent)
-	_ = targetClient.SetReadDeadline(time.Now().Add(time.Second))
-	if _, _, err := targetClient.ReadMessage(); err != nil {
+	_ = nextClient.SetReadDeadline(time.Now().Add(time.Second))
+	if _, _, err := nextClient.ReadMessage(); err != nil {
 		t.Fatalf("expected BOT direct fan-out payload: %v", err)
 	}
 	ws := m.MessagePipelineSummary(10 * time.Second).WS

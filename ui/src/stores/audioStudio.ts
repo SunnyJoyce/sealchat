@@ -1632,7 +1632,8 @@ export const useAudioStudioStore = defineStore('audioStudio', {
       return this.audioLibrary;
     },
 
-    async saveAudioLibrarySettings(mode: 'database' | 's3', prefix: string, selectorDepth = this.audioLibrary.selectorDepth) {
+    async saveAudioLibrarySettings(mode: 'database' | 's3', prefix: string, selectorDepth?: number) {
+      if (selectorDepth === undefined) selectorDepth = this.audioLibrary.selectorDepth;
       const resp = await api.put('/api/v1/audio/library/settings', { worldId: this.currentWorldId || undefined, mode, prefix, selectorDepth });
       this.audioLibrary = resp.data as AudioLibrarySettings;
       this.audioLibraryPrefixes = [];
