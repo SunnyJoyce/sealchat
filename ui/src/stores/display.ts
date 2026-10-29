@@ -128,6 +128,8 @@ export interface DisplaySettings {
   messagePaddingY: number
   sendShortcut: 'enter' | 'ctrlEnter'
   autoCorrectPunctuation: boolean
+  autoOocOnParenStart: boolean
+  autoOocRoleOnParenStart: boolean
   inputToolbarImageEditorEnabled: boolean
   mobileMinimalInputEnabled: boolean
   mobileTheaterHideWhileTyping: boolean
@@ -622,6 +624,8 @@ export const createDefaultDisplaySettings = (): DisplaySettings => ({
   messagePaddingY: MESSAGE_PADDING_Y_DEFAULT,
   sendShortcut: SEND_SHORTCUT_DEFAULT,
   autoCorrectPunctuation: true,
+  autoOocOnParenStart: true,
+  autoOocRoleOnParenStart: false,
   inputToolbarImageEditorEnabled: true,
   mobileMinimalInputEnabled: isMobileBrowserRuntime(),
   mobileTheaterHideWhileTyping: false,
@@ -959,6 +963,8 @@ const parseStoredSettingsInternal = (
       ),
       sendShortcut: coerceSendShortcut((parsed as any)?.sendShortcut),
       autoCorrectPunctuation: coerceBoolean((parsed as any)?.autoCorrectPunctuation ?? true),
+      autoOocOnParenStart: coerceBoolean((parsed as any)?.autoOocOnParenStart ?? true),
+      autoOocRoleOnParenStart: coerceBoolean((parsed as any)?.autoOocRoleOnParenStart ?? false),
       inputToolbarImageEditorEnabled: coerceBoolean(parsed.inputToolbarImageEditorEnabled ?? true),
       mobileMinimalInputEnabled: coerceBoolean((parsed as any)?.mobileMinimalInputEnabled ?? false),
       mobileTheaterHideWhileTyping: coerceBoolean((parsed as any)?.mobileTheaterHideWhileTyping ?? false),
@@ -1349,6 +1355,14 @@ const normalizeWith = (base: DisplaySettings, patch?: Partial<DisplaySettings>):
     patch && Object.prototype.hasOwnProperty.call(patch, 'autoCorrectPunctuation')
       ? coerceBoolean((patch as any).autoCorrectPunctuation)
       : base.autoCorrectPunctuation,
+  autoOocOnParenStart:
+    patch && Object.prototype.hasOwnProperty.call(patch, 'autoOocOnParenStart')
+      ? coerceBoolean((patch as any).autoOocOnParenStart)
+      : base.autoOocOnParenStart,
+  autoOocRoleOnParenStart:
+    patch && Object.prototype.hasOwnProperty.call(patch, 'autoOocRoleOnParenStart')
+      ? coerceBoolean((patch as any).autoOocRoleOnParenStart)
+      : base.autoOocRoleOnParenStart,
   inputToolbarImageEditorEnabled:
     patch && Object.prototype.hasOwnProperty.call(patch, 'inputToolbarImageEditorEnabled')
       ? coerceBoolean(patch.inputToolbarImageEditorEnabled ?? true)

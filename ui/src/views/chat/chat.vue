@@ -144,6 +144,7 @@ import { COMPOSER_INSERT_TEXT_EVENT, insertTextIntoRichEditor, replaceRichEditor
 import { shouldAttemptCharacterApiReconnectBeforeBotCommand } from '@/utils/characterApiReconnectGuard';
 import { buildOptimisticMessageIcModeFields } from '@/utils/optimisticMessageIcMode';
 import { normalizePunctuationForMessageSend } from '@/utils/punctuationNormalizer';
+import { resolveParenOocSendOverride } from '@/features/composer-paren-ooc/parenOoc';
 import {
   buildGeneratedAvatarDataUrl,
   buildGeneratedAvatarFile,
@@ -13231,7 +13232,7 @@ const performSend = async (options?: {
     return;
   }
   const sendMode = options?.mode || inputMode.value;
-  const sendIcMode: 'ic' | 'ooc' = inputIcMode.value === 'ooc' ? 'ooc' : 'ic';
+  let sendIcMode: 'ic' | 'ooc' = inputIcMode.value === 'ooc' ? 'ooc' : 'ic';
   let draft = textToSend.value;
   let identityIdOverride = options?.identityIdOverride;
   let identityVariantIdOverride = options?.identityVariantIdOverride;
@@ -13303,6 +13304,29 @@ const performSend = async (options?: {
         stopTypingPreviewNow();
         return;
       }
+    }
+  }
+
+  const mappedOocRoleId = identityQuickSwitchChannelId
+    ? chat.getChannelIcOocRoleConfig(identityQuickSwitchChannelId).oocRoleId
+    : null;
+  const validMappedOocRoleId = mappedOocRoleId
+    && chat.getScopedChannelIdentities(identityQuickSwitchChannelId).some(item => item.id === mappedOocRoleId)
+    ? mappedOocRoleId
+    : null;
+  const parenOocOverride = resolveParenOocSendOverride({
+    content: draft,
+    inputMode: sendMode,
+    enabled: display.settings.autoOocOnParenStart,
+    useOocRole: display.settings.autoOocRoleOnParenStart,
+    hasExplicitIdentityOverride: Boolean(identityIdOverride) || identityVariantIdOverride !== undefined,
+    oocRoleId: validMappedOocRoleId,
+    isReedit: Boolean(activeReeditSource),
+  });
+  if (parenOocOverride) {
+    sendIcMode = parenOocOverride.icMode;
+    if (parenOocOverride.identityId) {
+      identityIdOverride = parenOocOverride.identityId;
     }
   }
 
@@ -13402,7 +13426,7 @@ const performSend = async (options?: {
     member: chat.curMember || undefined,
     quote: replyTo,
   };
-  Object.assign(tmpMsg as any, buildOptimisticMessageIcModeFields(chat.icMode === 'ooc' ? 'ooc' : 'ic'));
+  Object.assign(tmpMsg as any, buildOptimisticMessageIcModeFields(sendIcMode));
   const activeIdentity = identityIdOverride
     ? findIdentityMeta(chat.curChannel?.id, identityIdOverride)
     : chat.getActiveIdentity(chat.curChannel?.id);

@@ -1240,6 +1240,32 @@ const themeManagerMetaLabel = computed(() => `平台主题 ${display.platformThe
       <section v-if="activeSettingsCategory === 'input'" class="display-settings__section">
         <header>
           <div>
+            <p class="section-title">括号消息自动转场外</p>
+            <p class="section-desc">发送普通文本时忽略前导空白；若正文以 ( 或 （ 开始，仅本条消息按场外发送，不改变后续输入状态</p>
+          </div>
+        </header>
+        <n-switch v-model:value="draft.autoOocOnParenStart">
+          <template #checked>已开启</template>
+          <template #unchecked>已关闭</template>
+        </n-switch>
+        <div
+          class="input-sub-setting"
+          :class="{ 'input-sub-setting--disabled': !draft.autoOocOnParenStart }"
+        >
+          <div class="input-sub-setting__copy">
+            <p class="input-sub-setting__title">同时改为场外角色</p>
+            <p class="control-desc control-desc--hint">命中时使用本频道已配置的场外角色；未配置或已显式指定角色/差分时保留当前角色</p>
+          </div>
+          <n-switch
+            v-model:value="draft.autoOocRoleOnParenStart"
+            :disabled="!draft.autoOocOnParenStart"
+          />
+        </div>
+      </section>
+
+      <section v-if="activeSettingsCategory === 'input'" class="display-settings__section">
+        <header>
+          <div>
             <p class="section-title">插话切换规则</p>
             <p class="section-desc">点击“插话”后，第一条消息发送成功时，第二条消息将按此规则进入场内/场外模式</p>
           </div>
@@ -2086,6 +2112,34 @@ const themeManagerMetaLabel = computed(() => `平台主题 ${display.platformThe
 .indent-label {
   font-size: 0.85rem;
   color: var(--sc-text-primary);
+}
+
+.input-sub-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 0.75rem;
+  padding: 0.65rem 0 0 0.75rem;
+  border-left: 2px solid var(--sc-border-mute);
+}
+
+.input-sub-setting--disabled {
+  opacity: 0.58;
+}
+
+.input-sub-setting__copy {
+  min-width: 0;
+}
+
+.input-sub-setting__title {
+  margin: 0 0 0.15rem;
+  font-size: 0.85rem;
+  color: var(--sc-text-primary);
+}
+
+.input-sub-setting .control-desc {
+  margin: 0;
 }
 
 .input-hint-settings {
