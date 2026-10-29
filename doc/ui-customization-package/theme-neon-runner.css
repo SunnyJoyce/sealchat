@@ -1224,9 +1224,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root[data-sc-surface] *,
-  :root[data-sc-surface] *::before,
-  :root[data-sc-surface] *::after {
+  :root[data-sc-surface] *:not(.tiptap-performance):not(.twin-layer-message__char):not(.twin-layer-message__char-glyph),
+  :root[data-sc-surface] *:not(.tiptap-performance):not(.twin-layer-message__char):not(.twin-layer-message__char-glyph)::before,
+  :root[data-sc-surface] *:not(.tiptap-performance):not(.twin-layer-message__char):not(.twin-layer-message__char-glyph)::after {
     scroll-behavior: auto !important;
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;

@@ -120,6 +120,22 @@ SealChat 基础样式
 
 如果多个包同时修改相同变量，优先调整包顺序。不要为了抢优先级大量使用 `!important`。
 
+SealChat 会保护一部分功能样式。富文本演出使用 `.tiptap-performance`、`.twin-layer-message__char` 和 `.twin-layer-message__char-glyph` 等运行时类。主题可以修改这些节点的字体、颜色、字号和背景，但不要强制覆盖它们的 `animation`、`animation-delay`、`display`、`transform`、`transform-origin`、`filter` 或 `opacity`。
+
+系统富文本演出的关键帧使用 `sc-performance-*` 前缀。这个前缀属于 SealChat 保留命名空间。第三方包不要声明同名 `@keyframes`，也不要用全局 `!important` 规则重置这些演出节点。
+
+如果主题需要响应 `prefers-reduced-motion`，应把富文本演出节点排除在全局动画降级规则之外。例如：
+
+~~~css
+@media (prefers-reduced-motion: reduce) {
+  :root[data-sc-surface] *:not(.tiptap-performance):not(.twin-layer-message__char):not(.twin-layer-message__char-glyph) {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+~~~
+
 ## 6. 根节点属性
 
 运行时会在 `html` 上提供稳定属性。它们适合控制页面范围、日夜配色和布局差异。

@@ -452,10 +452,12 @@ onBeforeUnmount(() => {
   white-space: pre-wrap;
 }
 
+/* 演出结构属于功能样式：主题可以改字体/颜色，但不应破坏逐字动画节点。 */
+:root[data-sc-surface] .tiptap-performance,
 .twin-layer-message__overlay-text .tiptap-performance,
 .twin-layer-message__base .tiptap-performance {
-  display: inline-block;
-  transform-origin: center;
+  display: inline-block !important;
+  transform-origin: center !important;
   --performance-scale: scale(1);
   --performance-tone-intensity: 0;
   --performance-char-index: 0;
@@ -468,14 +470,14 @@ onBeforeUnmount(() => {
   filter: brightness(var(--performance-tone-brightness));
 }
 
-.twin-layer-message__char {
-  display: inline-block;
-  transform-origin: center;
+:root[data-sc-surface] .twin-layer-message__char {
+  display: inline-block !important;
+  transform-origin: center !important;
 }
 
-.twin-layer-message__char-glyph {
-  display: inline-block;
-  transform-origin: center;
+:root[data-sc-surface] .twin-layer-message__char-glyph {
+  display: inline-block !important;
+  transform-origin: center !important;
 }
 
 .twin-layer-message__char--code {
@@ -486,103 +488,124 @@ onBeforeUnmount(() => {
   font-family: var(--sc-code-font, ui-monospace, SFMono-Regular, Consolas, monospace);
 }
 
-.fx-wave {
-  animation: performance-wave 2.6s cubic-bezier(.45,.05,.2,1) infinite;
-  animation-delay: calc(var(--performance-char-index) * -150ms);
+:root[data-sc-surface] .tiptap-performance.fx-wave,
+:root[data-sc-surface] .twin-layer-message .fx-wave {
+  animation: sc-performance-wave 2.6s cubic-bezier(.45,.05,.2,1) infinite !important;
+  animation-delay: calc(var(--performance-char-index) * -150ms) !important;
 }
 
-.fx-shake {
-  animation: performance-shake 0.24s linear infinite;
+:root[data-sc-surface] .tiptap-performance.fx-shake,
+:root[data-sc-surface] .twin-layer-message .fx-shake {
+  animation: sc-performance-shake 0.24s linear infinite !important;
 }
 
-.fx-rainbow {
-  animation: performance-rainbow 1.8s linear infinite;
+:root[data-sc-surface] .tiptap-performance.fx-rainbow,
+:root[data-sc-surface] .twin-layer-message .fx-rainbow {
+  animation: sc-performance-rainbow 1.8s linear infinite !important;
 }
 
-.fx-glitch {
-  animation: performance-glitch 0.65s steps(2, end) infinite;
+:root[data-sc-surface] .tiptap-performance.fx-glitch,
+:root[data-sc-surface] .twin-layer-message .fx-glitch {
+  animation: sc-performance-glitch 0.65s steps(2, end) infinite !important;
 }
 
-.fx-blink {
-  animation: performance-blink 1.6s ease-in-out infinite;
+:root[data-sc-surface] .tiptap-performance.fx-blink,
+:root[data-sc-surface] .twin-layer-message .fx-blink {
+  animation: sc-performance-blink 1.6s ease-in-out infinite !important;
 }
 
-.fx-glow {
-  animation: performance-glow 2.8s ease-in-out infinite;
+:root[data-sc-surface] .tiptap-performance.fx-glow,
+:root[data-sc-surface] .twin-layer-message .fx-glow {
+  animation: sc-performance-glow 2.8s ease-in-out infinite !important;
 }
 
-.fx-pulse {
-  animation: performance-pulse 1.8s ease-in-out infinite;
+:root[data-sc-surface] .tiptap-performance.fx-pulse,
+:root[data-sc-surface] .twin-layer-message .fx-pulse {
+  animation: sc-performance-pulse 1.8s ease-in-out infinite !important;
 }
 
-.fx-float {
-  animation: performance-float 3.2s ease-in-out infinite;
-  animation-delay: calc(var(--performance-char-index) * -110ms);
+:root[data-sc-surface] .tiptap-performance.fx-float,
+:root[data-sc-surface] .twin-layer-message .fx-float {
+  animation: sc-performance-float 3.2s ease-in-out infinite !important;
+  animation-delay: calc(var(--performance-char-index) * -110ms) !important;
 }
 
 /* 摇摆以字符底部为支点；选择器需压过 base 层 .tiptap-performance 的 transform-origin，且只作用于 sway。 */
-.twin-layer-message__char-glyph.fx-sway,
-.tiptap-performance.fx-sway {
-  transform-origin: center bottom;
+:root[data-sc-surface] .twin-layer-message__char-glyph.fx-sway,
+:root[data-sc-surface] .tiptap-performance.fx-sway {
+  transform-origin: center bottom !important;
 }
 
-.fx-sway {
-  animation: performance-sway 2.6s ease-in-out infinite;
-  animation-delay: calc(var(--performance-char-index) * -90ms);
+:root[data-sc-surface] .tiptap-performance.fx-sway,
+:root[data-sc-surface] .twin-layer-message .fx-sway {
+  animation: sc-performance-sway 2.6s ease-in-out infinite !important;
+  animation-delay: calc(var(--performance-char-index) * -90ms) !important;
 }
 
 /* 心跳整段同步，不做逐字错相，避免变成波浪式缩放。 */
-.fx-heartbeat {
-  animation: performance-heartbeat 1.8s ease-out infinite;
+:root[data-sc-surface] .tiptap-performance.fx-heartbeat,
+:root[data-sc-surface] .twin-layer-message .fx-heartbeat {
+  animation: sc-performance-heartbeat 1.8s ease-out infinite !important;
 }
 
-.fx-wobble {
-  animation: performance-wobble 1.8s ease-in-out infinite;
-  animation-delay: calc(var(--performance-char-index) * -70ms);
+:root[data-sc-surface] .tiptap-performance.fx-wobble,
+:root[data-sc-surface] .twin-layer-message .fx-wobble {
+  animation: sc-performance-wobble 1.8s ease-in-out infinite !important;
+  animation-delay: calc(var(--performance-char-index) * -70ms) !important;
 }
 
-.enter-blur {
-  animation: performance-enter-blur 0.42s ease-out both;
+:root[data-sc-surface] .tiptap-performance.enter-blur,
+:root[data-sc-surface] .twin-layer-message .enter-blur {
+  animation: sc-performance-enter-blur 0.42s ease-out both !important;
 }
 
-.enter-typewriter {
-  animation: performance-enter-typewriter calc(140ms + (10 - var(--performance-enter-speed, 5)) * 26ms) cubic-bezier(.17,.84,.44,1) both;
+:root[data-sc-surface] .tiptap-performance.enter-typewriter,
+:root[data-sc-surface] .twin-layer-message .enter-typewriter {
+  animation: sc-performance-enter-typewriter calc(140ms + (10 - var(--performance-enter-speed, 5)) * 26ms) cubic-bezier(.17,.84,.44,1) both !important;
 }
 
 /* 进入动画挂在字符外层 span，持续效果挂在内层 glyph，两者 transform 逐层叠加。 */
-.enter-fade {
-  animation: performance-enter-fade calc(220ms + (10 - var(--performance-enter-speed, 5)) * 34ms) ease-out both;
+:root[data-sc-surface] .tiptap-performance.enter-fade,
+:root[data-sc-surface] .twin-layer-message .enter-fade {
+  animation: sc-performance-enter-fade calc(220ms + (10 - var(--performance-enter-speed, 5)) * 34ms) ease-out both !important;
 }
 
-.enter-rise {
-  animation: performance-enter-rise calc(240ms + (10 - var(--performance-enter-speed, 5)) * 34ms) cubic-bezier(.17,.84,.44,1) both;
+:root[data-sc-surface] .tiptap-performance.enter-rise,
+:root[data-sc-surface] .twin-layer-message .enter-rise {
+  animation: sc-performance-enter-rise calc(240ms + (10 - var(--performance-enter-speed, 5)) * 34ms) cubic-bezier(.17,.84,.44,1) both !important;
 }
 
-.enter-drop {
-  animation: performance-enter-drop calc(260ms + (10 - var(--performance-enter-speed, 5)) * 34ms) cubic-bezier(.3,.7,.4,1) both;
+:root[data-sc-surface] .tiptap-performance.enter-drop,
+:root[data-sc-surface] .twin-layer-message .enter-drop {
+  animation: sc-performance-enter-drop calc(260ms + (10 - var(--performance-enter-speed, 5)) * 34ms) cubic-bezier(.3,.7,.4,1) both !important;
 }
 
-.enter-zoom {
-  animation: performance-enter-zoom calc(240ms + (10 - var(--performance-enter-speed, 5)) * 30ms) cubic-bezier(.2,.8,.3,1) both;
+:root[data-sc-surface] .tiptap-performance.enter-zoom,
+:root[data-sc-surface] .twin-layer-message .enter-zoom {
+  animation: sc-performance-enter-zoom calc(240ms + (10 - var(--performance-enter-speed, 5)) * 30ms) cubic-bezier(.2,.8,.3,1) both !important;
 }
 
-.enter-tracking {
-  animation: performance-enter-tracking calc(280ms + (10 - var(--performance-enter-speed, 5)) * 36ms) cubic-bezier(.17,.84,.44,1) both;
+:root[data-sc-surface] .tiptap-performance.enter-tracking,
+:root[data-sc-surface] .twin-layer-message .enter-tracking {
+  animation: sc-performance-enter-tracking calc(280ms + (10 - var(--performance-enter-speed, 5)) * 36ms) cubic-bezier(.17,.84,.44,1) both !important;
 }
 
-.enter-flash {
-  animation: performance-enter-flash calc(260ms + (10 - var(--performance-enter-speed, 5)) * 30ms) linear both;
+:root[data-sc-surface] .tiptap-performance.enter-flash,
+:root[data-sc-surface] .twin-layer-message .enter-flash {
+  animation: sc-performance-enter-flash calc(260ms + (10 - var(--performance-enter-speed, 5)) * 30ms) linear both !important;
 }
 
-.enter-glitch {
-  animation: performance-enter-glitch calc(280ms + (10 - var(--performance-enter-speed, 5)) * 30ms) steps(1, end) both;
+:root[data-sc-surface] .tiptap-performance.enter-glitch,
+:root[data-sc-surface] .twin-layer-message .enter-glitch {
+  animation: sc-performance-enter-glitch calc(280ms + (10 - var(--performance-enter-speed, 5)) * 30ms) steps(1, end) both !important;
 }
 
-.enter-slam {
-  animation: performance-enter-slam calc(180ms + (10 - var(--performance-enter-speed, 5)) * 22ms) both;
+:root[data-sc-surface] .tiptap-performance.enter-slam,
+:root[data-sc-surface] .twin-layer-message .enter-slam {
+  animation: sc-performance-enter-slam calc(180ms + (10 - var(--performance-enter-speed, 5)) * 22ms) both !important;
 }
 
-@keyframes performance-wave {
+@keyframes sc-performance-wave {
   0%, 100% { transform: var(--performance-scale) translateY(0.04em) skewX(0deg) scaleY(1); }
   18% { transform: var(--performance-scale) translateY(-0.06em) skewX(calc(var(--performance-tone-skew) * 0.04)) scaleY(1.01); }
   38% { transform: var(--performance-scale) translateY(-0.22em) skewX(calc(var(--performance-tone-skew) * 0.1)) scaleY(1.04); }
@@ -590,13 +613,13 @@ onBeforeUnmount(() => {
   78% { transform: var(--performance-scale) translateY(0.12em) skewX(calc(var(--performance-tone-skew) * -0.09)) scaleY(0.97); }
 }
 
-@keyframes performance-shake {
+@keyframes sc-performance-shake {
   0%, 100% { transform: var(--performance-scale) translateX(0); }
   25% { transform: var(--performance-scale) translateX(-0.04em); }
   75% { transform: var(--performance-scale) translateX(0.04em); }
 }
 
-@keyframes performance-rainbow {
+@keyframes sc-performance-rainbow {
   0% { color: #ef4444; }
   25% { color: #f59e0b; }
   50% { color: #10b981; }
@@ -604,7 +627,7 @@ onBeforeUnmount(() => {
   100% { color: #ef4444; }
 }
 
-@keyframes performance-glitch {
+@keyframes sc-performance-glitch {
   0%, 100% {
     transform: var(--performance-scale) translate(0) skewX(0deg);
     text-shadow: none;
@@ -645,7 +668,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes performance-blink {
+@keyframes sc-performance-blink {
   0%, 14%, 32%, 100% { opacity: 1; filter: brightness(var(--performance-tone-brightness)); }
   18% { opacity: 0.62; filter: brightness(calc(var(--performance-tone-brightness) * 0.9)); }
   24% { opacity: 0.96; filter: brightness(calc(var(--performance-tone-brightness) * 1.04)); }
@@ -653,12 +676,12 @@ onBeforeUnmount(() => {
   82% { opacity: 0.88; filter: brightness(calc(var(--performance-tone-brightness) * 1.06)); }
 }
 
-@keyframes performance-enter-blur {
+@keyframes sc-performance-enter-blur {
   from { opacity: 0; filter: blur(8px); }
   to { opacity: 1; filter: blur(0); }
 }
 
-@keyframes performance-enter-typewriter {
+@keyframes sc-performance-enter-typewriter {
   0% {
     opacity: 0;
     transform: var(--performance-scale);
@@ -671,7 +694,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes performance-glow {
+@keyframes sc-performance-glow {
   0%, 100% {
     text-shadow: 0 0 0.1em color-mix(in srgb, currentColor 30%, transparent);
   }
@@ -682,26 +705,26 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes performance-pulse {
+@keyframes sc-performance-pulse {
   0%, 100% { opacity: 1; transform: var(--performance-scale) scale(1); }
   50% { opacity: 0.8; transform: var(--performance-scale) scale(1.06); }
 }
 
-@keyframes performance-float {
+@keyframes sc-performance-float {
   0%, 100% { transform: var(--performance-scale) translate(0, 0); }
   25% { transform: var(--performance-scale) translate(0.02em, -0.06em); }
   50% { transform: var(--performance-scale) translate(0, -0.12em); }
   75% { transform: var(--performance-scale) translate(-0.02em, -0.06em); }
 }
 
-@keyframes performance-sway {
+@keyframes sc-performance-sway {
   0%, 100% { transform: var(--performance-scale) translateX(0) rotate(0deg); }
   25% { transform: var(--performance-scale) translate(0.015em, -0.02em) rotate(2deg); }
   50% { transform: var(--performance-scale) translateX(0) rotate(0deg); }
   75% { transform: var(--performance-scale) translate(-0.015em, -0.02em) rotate(-2deg); }
 }
 
-@keyframes performance-heartbeat {
+@keyframes sc-performance-heartbeat {
   0%, 55%, 100% { transform: var(--performance-scale) scale(1); }
   8% { transform: var(--performance-scale) scale(1.12); }
   14% { transform: var(--performance-scale) scale(1); }
@@ -709,7 +732,7 @@ onBeforeUnmount(() => {
   30% { transform: var(--performance-scale) scale(1); }
 }
 
-@keyframes performance-wobble {
+@keyframes sc-performance-wobble {
   0%, 100% { transform: var(--performance-scale) rotate(0deg) scale(1, 1); }
   20% { transform: var(--performance-scale) translateX(0.01em) rotate(-1.5deg) scale(1.04, 0.96); }
   40% { transform: var(--performance-scale) translateY(-0.01em) rotate(1deg) scale(0.97, 1.05); }
@@ -717,30 +740,30 @@ onBeforeUnmount(() => {
   80% { transform: var(--performance-scale) translateX(-0.01em) rotate(1.5deg) scale(0.96, 1.04); }
 }
 
-@keyframes performance-enter-fade {
+@keyframes sc-performance-enter-fade {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
-@keyframes performance-enter-rise {
+@keyframes sc-performance-enter-rise {
   from { opacity: 0; transform: var(--performance-scale) translateY(0.5em); }
   to { opacity: 1; transform: var(--performance-scale); }
 }
 
-@keyframes performance-enter-drop {
+@keyframes sc-performance-enter-drop {
   0% { opacity: 0; transform: var(--performance-scale) translateY(-0.7em); }
   65% { opacity: 1; transform: var(--performance-scale) translateY(0.06em); }
   100% { opacity: 1; transform: var(--performance-scale); }
 }
 
-@keyframes performance-enter-zoom {
+@keyframes sc-performance-enter-zoom {
   0% { opacity: 0; transform: var(--performance-scale) scale(0.35); }
   70% { opacity: 1; transform: var(--performance-scale) scale(1.08); }
   100% { opacity: 1; transform: var(--performance-scale); }
 }
 
 /* 只位移字符本身，不改真实 letter-spacing，避免播放中整行重排。 */
-@keyframes performance-enter-tracking {
+@keyframes sc-performance-enter-tracking {
   from {
     opacity: 0;
     transform: var(--performance-scale) translateX(var(--performance-tracking-offset, 0.2em));
@@ -748,7 +771,7 @@ onBeforeUnmount(() => {
   to { opacity: 1; transform: var(--performance-scale); }
 }
 
-@keyframes performance-enter-flash {
+@keyframes sc-performance-enter-flash {
   0% { opacity: 0; }
   18% { opacity: 1; text-shadow: 0 0 0.32em currentColor; }
   36% { opacity: 0.25; }
@@ -757,7 +780,7 @@ onBeforeUnmount(() => {
   100% { opacity: 1; }
 }
 
-@keyframes performance-enter-glitch {
+@keyframes sc-performance-enter-glitch {
   0% {
     opacity: 0;
     transform: var(--performance-scale) translateX(-0.14em) skewX(-14deg);
@@ -791,7 +814,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes performance-enter-slam {
+@keyframes sc-performance-enter-slam {
   0% {
     opacity: 0;
     transform: var(--performance-scale) scale(2.4);
