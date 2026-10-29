@@ -148,7 +148,7 @@ const saveCurrentTab = async () => {
       <n-tab-pane name="external-glossary" tab="外挂世界术语">
         <admin-settings-external-glossary />
       </n-tab-pane>
-      <n-tab-pane name="theme-style" tab="主题与样式管理">
+      <n-tab-pane name="theme-style" tab="主题与样式管理" class="sc-admin-settings-theme-pane">
         <admin-settings-theme-style ref="themeStyleSettingsRef" />
       </n-tab-pane>
       <n-tab-pane name="backup-storage" tab="备份与储存优化">
@@ -275,6 +275,11 @@ const saveCurrentTab = async () => {
 
 .sc-admin-settings-tabs :deep(.n-tab-pane > *) {
   height: 100%;
+}
+
+.sc-admin-settings-tabs :deep(.sc-admin-settings-theme-pane) {
+  display: flex;
+  flex-direction: column;
 }
 
 .sc-admin-settings-audio-drawer__header {

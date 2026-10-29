@@ -984,6 +984,7 @@ defineExpose<AdminThemeStyleExpose>({
 
 <style scoped>
 .admin-settings-scroll {
+  flex: 1;
   height: 100%;
   min-height: 0;
   box-sizing: border-box;
