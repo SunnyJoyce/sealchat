@@ -641,7 +641,7 @@ defineExpose<AdminThemeStyleExpose>({
 </script>
 
 <template>
-  <div class="admin-settings-scroll overflow-y-auto pr-2" style="max-height: 61vh; margin-top: 0;">
+  <div class="admin-settings-scroll overflow-y-auto pr-2">
     <input
       ref="importFileInputRef"
       type="file"
@@ -984,8 +984,12 @@ defineExpose<AdminThemeStyleExpose>({
 
 <style scoped>
 .admin-settings-scroll {
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
   overflow-x: hidden;
-  overflow-y: scroll;
+  overflow-y: auto;
+  padding-bottom: 20px;
   scrollbar-gutter: stable;
 }
 
