@@ -9591,14 +9591,8 @@ const finalizeDrag = async () => {
   }
 
   const [moving] = working.splice(fromIndex, 1);
-  let targetIndex = toReference;
-  if (position === 'after') {
-    if (fromIndex < toReference) {
-      targetIndex = toReference;
-    } else {
-      targetIndex = toReference + 1;
-    }
-  }
+  const adjustedReferenceIndex = toReference - (fromIndex < toReference ? 1 : 0);
+  let targetIndex = adjustedReferenceIndex + (position === 'after' ? 1 : 0);
   if (targetIndex < 0) {
     targetIndex = 0;
   }
@@ -9613,7 +9607,6 @@ const finalizeDrag = async () => {
   );
   (moving as any).displayOrder = estimateOrder;
   rows.value = working;
-  listRevision.value += 1;
 
   const beforeId = working[targetIndex + 1]?.id || '';
   const afterId = working[targetIndex - 1]?.id || '';
@@ -9637,7 +9630,6 @@ const finalizeDrag = async () => {
     message.error('消息排序失败，请稍后重试');
   } finally {
     localReorderOps.delete(clientOpId);
-    listRevision.value += 1;
   }
 };
 
