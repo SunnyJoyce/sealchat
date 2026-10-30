@@ -2535,6 +2535,7 @@ defineExpose({ openCardById });
               <div class="overlay-template-presets">
                 <n-button size="tiny" :disabled="snapshotTemplateSaving" @click="applyDefaultSnapshotTemplatePreset('shinobigami')">忍神</n-button>
                 <n-button size="tiny" :disabled="snapshotTemplateSaving" @click="applyDefaultSnapshotTemplatePreset('daggerheart')">匕首之心</n-button>
+                <n-button size="tiny" :disabled="snapshotTemplateSaving" @click="applyDefaultSnapshotTemplatePreset('ta')">三角机构</n-button>
                 <n-button size="tiny" :disabled="snapshotTemplateSaving" @click="applyDefaultSnapshotTemplatePreset('coc')">COC</n-button>
               </div>
             </div>
@@ -2663,6 +2664,7 @@ defineExpose({ openCardById });
               <div class="overlay-template-presets">
                 <n-button size="tiny" :disabled="snapshotTemplateSaving" @click="applyDefaultSnapshotTemplatePreset('shinobigami')">忍神</n-button>
                 <n-button size="tiny" :disabled="snapshotTemplateSaving" @click="applyDefaultSnapshotTemplatePreset('daggerheart')">匕首之心</n-button>
+                <n-button size="tiny" :disabled="snapshotTemplateSaving" @click="applyDefaultSnapshotTemplatePreset('ta')">三角机构</n-button>
                 <n-button size="tiny" :disabled="snapshotTemplateSaving" @click="applyDefaultSnapshotTemplatePreset('coc')">COC</n-button>
               </div>
             </div>
@@ -2729,6 +2731,7 @@ defineExpose({ openCardById });
               <div class="overlay-template-presets">
                 <n-button size="tiny" :disabled="!canSyncBadgeTemplate || avatarSettingsSaving" @click="applyAvatarTemplatePreset('shinobigami')">忍神</n-button>
                 <n-button size="tiny" :disabled="!canSyncBadgeTemplate || avatarSettingsSaving" @click="applyAvatarTemplatePreset('daggerheart')">匕首之心</n-button>
+                <n-button size="tiny" :disabled="!canSyncBadgeTemplate || avatarSettingsSaving" @click="applyAvatarTemplatePreset('ta')">三角机构</n-button>
                 <n-button size="tiny" :disabled="!canSyncBadgeTemplate || avatarSettingsSaving" @click="applyAvatarTemplatePreset('coc')">COC</n-button>
               </div>
             </div>

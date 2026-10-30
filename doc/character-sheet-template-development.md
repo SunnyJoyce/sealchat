@@ -161,6 +161,8 @@
 
 内置匕首之心模板使用 `sheetType: "daggerheart"`，别名 `dh` 和 `匕首之心` 由统一类型注册表归一化。它声明依赖 [Daggerheart 插件](https://github.com/ZZZZzzzzac/Daggerheart_sealdice)，以 `.dd help` 探测，使用 `contains` 匹配 `.dd：动作掷骰；.ddr：反应掷骰。`。自动检测与忍神模板共用上述提示规则。
 
+内置三角机构模板使用 `sheetType: "ta"`，与社区插件 [triangle-agency](https://github.com/oissevalt/sealdice-plugins/blob/main/src/triangle-agency/triangle-agency.ts) 的规则模板名一致，别名 `triangle-agency` 和 `三角机构` 由统一类型注册表归一化。它以 `.ta help` 探测，使用 `contains` 匹配 `插件按未使用质保的情况结算`。
+
 ### 2.1 sealchat.onUpdate(callback)
 
 注册数据更新回调。
@@ -211,6 +213,8 @@ try {
 普通不依赖服务端属性的 `.r` 伤害指令无需等待。`ROLL_DICE` 和 `UPDATE_ATTRS` 的原有行为不变。
 
 内置匕首之心模板的 `.dd/.ddr` 已按此顺序执行，并在保存期间阻止同一次提交重复掷骰；保存失败时保留弹窗、显示错误且不发送指令，用户可重试。取消弹窗也会取消等待后的掷骰。
+
+内置三角机构模板的 `.ta/.tr/.tra` 检定以及结算阶段的 `.st` 调整（花费 QA、稍后重议、此刻之星）同样先等待保存完成再发送，因为插件按服务端人物卡上的当前 QA 计算过载；保存失败时保留弹窗并提示，本次不发送。`.tcs/.tfs` 查询不读取人物卡，直接发送。
 
 底层请求仍为 `SEALCHAT_EVENT`，`action: 'FLUSH_ATTRS'`，`payload: { requestId: string }`。宿主仅处理发送 iframe 所属窗口，并回复 `{ type: 'SEALCHAT_ATTRS_FLUSHED', windowId, requestId, ok: boolean, error?: string }`。注入方法验证父窗口来源及窗口 ID，超时或页面关闭会清理待处理请求。
 

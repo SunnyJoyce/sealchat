@@ -153,6 +153,7 @@ test('Daggerheart 内置模板只注册一次，别名筛选复用内置内容�
     '../../../doc/template/sealchat-default-template-v3-coc7th.html?raw': { default: '<html>coc</html>' },
     '../../../doc/template/sealchat-shinobigami-template-v1.html?raw': { default: shinobigamiHtml },
     '../../../doc/template/sealchat-daggerheart-template-v1.html?raw': { default: daggerheartHtml },
+    '../../../doc/template/sealchat-triangle-agency-template-v1.html?raw': { default: '<html>ta</html>' },
     '@/utils/characterSheetType': metadata,
     './user': { useUserStore: () => ({ info: { id: 'user-1' } }) },
     './_config': { api: {

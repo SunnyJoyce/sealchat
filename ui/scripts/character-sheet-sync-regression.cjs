@@ -63,6 +63,7 @@ function setup(update = async () => true, get = async () => ({ name: 'Hero', att
     '../../../doc/template/sealchat-default-template-v3-coc7th.html?raw': { default: '' },
     '../../../doc/template/sealchat-shinobigami-template-v1.html?raw': { default: '' },
     '../../../doc/template/sealchat-daggerheart-template-v1.html?raw': { default: daggerheartHtml },
+    '../../../doc/template/sealchat-triangle-agency-template-v1.html?raw': { default: '<html>ta</html>' },
     '@/utils/characterSheetType': sheetTypes,
     './characterCard': { useCharacterCardStore: () => card },
     './characterCardTemplate': { useCharacterCardTemplateStore: () => ({}) },

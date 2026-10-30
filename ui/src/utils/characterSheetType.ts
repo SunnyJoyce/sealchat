@@ -38,6 +38,7 @@ export const CHARACTER_SHEET_TYPES: readonly CharacterSheetTypeMeta[] = [
   { key: 'dnd5e', label: 'DND5', aliases: ['dnd5', 'dnd'] },
   { key: 'shinobigami', label: '忍神', aliases: ['忍神'] },
   { key: 'daggerheart', label: '匕首之心', aliases: ['dh', '匕首之心'] },
+  { key: 'ta', label: '三角机构', aliases: ['triangle-agency', '三角机构'] },
 ];
 
 export const normalizeCharacterSheetType = (value?: string) => {

@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import cocTemplateHtml from '../../../doc/template/sealchat-default-template-v3-coc7th.html?raw';
 import shinobigamiTemplateHtml from '../../../doc/template/sealchat-shinobigami-template-v1.html?raw';
 import daggerheartTemplateHtml from '../../../doc/template/sealchat-daggerheart-template-v1.html?raw';
+import triangleAgencyTemplateHtml from '../../../doc/template/sealchat-triangle-agency-template-v1.html?raw';
 import { api } from './_config';
 import { useUserStore } from './user';
 import { CHARACTER_SHEET_TYPES, normalizeCharacterSheetType as normalizeSheetType } from '@/utils/characterSheetType';
@@ -126,6 +127,12 @@ const BUILTIN_CHARACTER_CARD_TEMPLATES: BuiltinCharacterCardTemplate[] = [
     name: '匕首之心角色卡',
     sheetType: 'daggerheart',
     content: daggerheartTemplateHtml.trim(),
+    legacyMarkers: [],
+  },
+  {
+    name: '三角机构角色卡',
+    sheetType: 'ta',
+    content: triangleAgencyTemplateHtml.trim(),
     legacyMarkers: [],
   },
 ];

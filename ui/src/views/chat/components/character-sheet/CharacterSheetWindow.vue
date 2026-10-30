@@ -135,6 +135,9 @@
                   <n-button size="tiny" @click="resetTemplateToDaggerheart">
                     重置为匕首之心默认模板
                   </n-button>
+                  <n-button size="tiny" @click="resetTemplateToTriangleAgency">
+                    重置为三角机构默认模板
+                  </n-button>
                   <n-input
                     v-model:value="templateSaveName"
                     size="tiny"
@@ -676,6 +679,15 @@ const resetTemplateToShinobigami = () => {
 const resetTemplateToDaggerheart = () => {
   if (windowData.value?.readOnly) return;
   const tpl = sheetStore.getDefaultTemplate('daggerheart');
+  templateText.value = tpl;
+  sheetStore.updateTemplate(props.windowId, tpl);
+  selectedTemplateMode.value = 'detached';
+  selectedTemplateId.value = '';
+};
+
+const resetTemplateToTriangleAgency = () => {
+  if (windowData.value?.readOnly) return;
+  const tpl = sheetStore.getDefaultTemplate('ta');
   templateText.value = tpl;
   sheetStore.updateTemplate(props.windowId, tpl);
   selectedTemplateMode.value = 'detached';
