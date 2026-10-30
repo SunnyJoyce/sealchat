@@ -681,6 +681,7 @@ func WorldMemberRoleHandler(c *fiber.Ctx) error {
 		}
 	}
 	invalidateWorldNoticeVisibilityForUser(targetUserID, worldID)
+	broadcastChannelTreeInvalidatedByWorldID(user, worldID, "world-member-role")
 	return c.JSON(fiber.Map{"message": "已更新"})
 }
 
