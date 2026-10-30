@@ -3501,8 +3501,6 @@ func apiMessageUpdateVersioned(ctx *ChatContext, data *messageUpdatePayload) (an
 		}
 	}
 
-	// Quote conversion must not acquire a second connection inside the write transaction.
-	quote.ResolveWhisperTargetDisplayNames()
 	buildMessage := func() *protocol.Message {
 		messageData := msg.ToProtocolType2(channelData)
 		messageData.Content = msg.Content
@@ -3629,8 +3627,7 @@ func apiMessageUpdateVersioned(ctx *ChatContext, data *messageUpdatePayload) (an
 			updates[key] = value
 		}
 	}
-	// Refresh the non-persisted name cache after recipient/IC changes, before taking the writer.
-	msg.WhisperTargetDisplayNames = nil
+	// Resolve recipient names after recipient/IC changes, before taking the writer.
 	msg.ResolveWhisperTargetDisplayNames()
 	err = db.Transaction(func(tx *gorm.DB) error {
 		if ownerChanged {

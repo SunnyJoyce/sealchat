@@ -281,7 +281,7 @@ Avoid adding verbose per-request logging in hot endpoints unless operationally j
 
 ## Tests
 
-2026-10-30: whisper message serialization resolves display names through the global reader. Resolve/cache names for both the message and its quote before entering a write transaction, and refresh the message cache after recipient/IC changes. Otherwise a single-connection SQLite database can deadlock during serialization.
+2026-10-30: whisper message serialization resolves display names through the global reader. Resolve/cache message names after recipient/IC changes and before each write transaction that serializes the message; otherwise a single-connection SQLite database can deadlock. The current quote query selects only public messages, so it needs no whisper-name prefetch. A freshly loaded message's non-persisted name cache is already empty.
 
 When changing API behavior, prefer adding/updating API-package tests close to the affected handler or helper.
 

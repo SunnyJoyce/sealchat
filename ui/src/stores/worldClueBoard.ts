@@ -538,8 +538,8 @@ export const useWorldClueBoardStore = defineStore('worldClueBoard', () => {
       session.error = ''
       session.errorKind = null
       session.canRetry = false
-      await load(session.worldId, { force: true, userId: session.userId, scope: session.scope })
-      return !session.loadFailed
+      const reloaded = await load(session.worldId, { force: true, userId: session.userId, scope: session.scope })
+      return !reloaded.loadFailed && reloaded.status !== 'error'
     }
     session.error = ''
     session.status = 'ready'
