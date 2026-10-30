@@ -10,6 +10,7 @@ import MessageForwardDialog from './components/MessageForwardDialog.vue';
 import { VirtualList } from 'vue-tiny-virtual-list';
 import { chatEvent, useChatStore, type InlineChatSplitOpenPayload, type PendingMessageJump } from '@/stores/chat';
 import type { Event, Message, User } from '@satorijs/protocol'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { AvatarDecoration, ChannelIdentity, ChannelIdentityFolder, ChannelIdentityManageCandidate, ChannelIdentityVariant, GalleryItem, SatoriMessage, UserInfo, SChannel, WhisperMeta } from '@/types'
 import { useUserStore } from '@/stores/user';
 import { ArrowBarToDown, Plus, Upload, Send, ArrowBackUp, MessagePlus, Palette, Download, ArrowsVertical, Star, StarOff, FolderPlus, DotsVertical, Folders, Copy as CopyIcon, Search as SearchIcon, Check, X, ChevronDown, ChevronRight, MoodSmile as EmojiTriggerIcon } from '@vicons/tabler'
@@ -5944,7 +5945,7 @@ const handleIdentityAvatarTrigger = () => {
   identityAvatarInputRef.value?.click();
 };
 
-const handleIdentityAvatarChange = async (event: Event) => {
+const handleIdentityAvatarChange = async (event: globalThis.Event) => {
   const input = event.target as HTMLInputElement | null;
   if (!input || !input.files?.length) {
     return;
@@ -6254,7 +6255,7 @@ const handleIdentityVariantAvatarTrigger = () => {
   identityVariantAvatarInputRef.value?.click();
 };
 
-const handleIdentityVariantAvatarChange = (event: Event) => {
+const handleIdentityVariantAvatarChange = (event: globalThis.Event) => {
   const input = event.target as HTMLInputElement | null;
   if (!input || !input.files?.length) {
     return;
@@ -8603,7 +8604,8 @@ const loadMessagesByCursor = async (payload: { messageId: string; displayOrder?:
   }
 };
 
-const locateMessageForJump = async (payload: { messageId: string; displayOrder?: number; createdAt?: number }) => {
+type LocatedMessageWindow = NonNullable<Parameters<typeof applyHistoricalWindowFromMessages>[2]> & { messages: Message[] };
+const locateMessageForJump = async (payload: { messageId: string; displayOrder?: number; createdAt?: number }): Promise<LocatedMessageWindow | null> => {
   for (const span of SEARCH_JUMP_WINDOWS_MS) {
     const window = await loadMessagesWithinWindow(payload, span);
     if (window) {
@@ -9931,7 +9933,7 @@ async function replaceUsernames(text: string) {
     console.warn('replaceUsernames 拉取成员列表失败，跳过替换', error);
     return text;
   }
-  const memberList = Array.isArray(resp?.data) ? resp.data : [];
+  const memberList: User[] = Array.isArray(resp?.data) ? resp.data : [];
   if (!memberList.length) {
     return text;
   }
@@ -10013,7 +10015,7 @@ const {
   inHistoryMode,
   historyLocked,
   editingIdentityPreviewContext,
-  resolveIdentityVariantShortcutMatch: (...args) => resolveIdentityVariantShortcutMatch(...args),
+  resolveIdentityVariantShortcutMatch: (...args: Parameters<typeof resolveIdentityVariantShortcutMatch>) => resolveIdentityVariantShortcutMatch(...args),
   resolveIdentityAppearancePreview: (...args) => resolveIdentityAppearancePreview(...args),
   replaceEmojiRemarksForPreview,
   cloneAvatarDecorations: (...args) => cloneAvatarDecorations(...args),
@@ -10328,7 +10330,7 @@ const normalizeHistoryEntries = (entries: any[]): InputHistoryEntry[] => {
         images = entry.images
           .filter((img: any) => img && typeof img.markerId === 'string' && typeof img.attachmentId === 'string')
           .map((img: any) => ({ markerId: img.markerId, attachmentId: img.attachmentId }));
-        if (images.length === 0) {
+        if (!images?.length) {
           images = undefined;
         }
       }
@@ -12758,7 +12760,7 @@ const renderPreviewContent = (value: string) => {
     if (match[1]) {
       // [[图片:markerId]] 格式
       const markerId = match[1];
-      const imageInfo = inlineImages.get(markerId);
+      const imageInfo = inlineImagePreviewMap.value[markerId];
       if (imageInfo && imageInfo.previewUrl) {
         result += `<img src="${imageInfo.previewUrl}" class="preview-inline-image" alt="图片" />`;
       } else {
@@ -12996,7 +12998,7 @@ const handleRichImageInsert = async (files: File[], options?: { skipCompression?
       const { state } = editor;
       const { doc } = state;
 
-      doc.descendants((node, pos) => {
+      doc.descendants((node: ProseMirrorNode, pos: number) => {
         if (node.type.name === 'image' && node.attrs.src === objectUrl) {
           const tr = state.tr.setNodeMarkup(pos, undefined, {
             ...node.attrs,
@@ -13017,7 +13019,7 @@ const handleRichImageInsert = async (files: File[], options?: { skipCompression?
   }
 };
 
-const handleInlineFileChange = (event: Event) => {
+const handleInlineFileChange = (event: globalThis.Event) => {
   const input = event.target as HTMLInputElement | null;
   if (!input?.files?.length) {
     pendingInlineSelection = null;
@@ -16969,7 +16971,7 @@ onBeforeUnmount(() => {
                 :content="pinItem.content"
                 :item="pinItem"
                 :all-message-ids="allMessageIds"
-                :editing-preview="editingPreviewMap[pinItem.id]"
+                :editing-preview="editingPreviewMap[pinItem.id || '']"
                 :edit-saving="isSavingEdit"
                 :tone="getMessageTone(pinItem)"
                 :show-avatar="getMessageAvatarRenderState(pinItem).showAvatar"
@@ -17068,7 +17070,7 @@ onBeforeUnmount(() => {
                     :content="entry.message.content"
                     :item="entry.message"
                     :all-message-ids="allMessageIds"
-                    :editing-preview="editingPreviewMap[entry.message.id]"
+                    :editing-preview="editingPreviewMap[entry.message.id || '']"
                     :edit-saving="isSavingEdit"
                     :tone="getMessageTone(entry.message)"
                     :show-avatar="false"
@@ -17108,7 +17110,7 @@ onBeforeUnmount(() => {
                 :content="entry.message.content"
                 :item="entry.message"
                 :all-message-ids="allMessageIds"
-                :editing-preview="editingPreviewMap[entry.message.id]"
+                :editing-preview="editingPreviewMap[entry.message.id || '']"
                 :edit-saving="isSavingEdit"
                 :tone="getMessageTone(entry.message)"
                 :show-avatar="false"
@@ -17145,7 +17147,7 @@ onBeforeUnmount(() => {
                 :content="entry.message.content"
                 :item="entry.message"
                 :all-message-ids="allMessageIds"
-                :editing-preview="editingPreviewMap[entry.message.id]"
+                :editing-preview="editingPreviewMap[entry.message.id || '']"
                 :edit-saving="isSavingEdit"
                 :tone="getMessageTone(entry.message)"
                 :show-avatar="getMessageAvatarRenderState(entry.message, entry.mergedWithPrev).showAvatar"
@@ -19008,7 +19010,7 @@ onBeforeUnmount(() => {
     v-model:visible="importProgressVisible"
     :channel-id="chat.curChannel?.id || ''"
     :job-id="importJobId"
-    @complete="() => { chat.fetchMessages(chat.curChannel?.id); }"
+    @complete="() => { void fetchLatestMessages(); }"
   />
   <DiceTrayFloatingWindow
     ref="diceTrayWindowRef"

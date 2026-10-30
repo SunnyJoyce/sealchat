@@ -3,6 +3,7 @@ import { normalizeAvatarTextStyle } from '@/utils/channelIdentityAvatar';
 import { useSpeechStore } from '@/features/tts/store'
 import { computed, ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useChatStore } from '@/stores/chat';
+import type { ChannelIdentity } from '@/types';
 import { useCharacterCardStore } from '@/stores/characterCard';
 import { useUserStore } from '@/stores/user';
 import { useDisplayStore } from '@/stores/display';

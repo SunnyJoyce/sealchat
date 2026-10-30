@@ -429,7 +429,8 @@ const sendSmtpTestEmail = async () => {
           />
         </div>
       </n-form-item>
-      <n-form-item label="可访问地址" :feedback="feedbackAdminShow ? link : ''">
+      <n-form-item label="可访问地址">
+        <template #feedback><component v-if="feedbackAdminShow" :is="() => link" /></template>
         <n-input
           v-model:value="model.domain"
           placeholder="多个公开地址请使用 ; 分隔，例如 https://a.example;https://b.example"

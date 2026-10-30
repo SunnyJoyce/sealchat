@@ -162,7 +162,7 @@ interface ChatState {
   channelTreePrivateReady: boolean,
   favoriteChannelCandidatesByWorld: Record<string, SChannel[]>,
   favoriteChannelCandidatesReady: Record<string, boolean>,
-  curChannel: Channel | null,
+  curChannel: SChannel | null,
   currentWorldId: string,
   lastConsumedWorldInvite: { slug: string; worldId: string } | null,
   observerMode: boolean,
@@ -999,8 +999,8 @@ const ensureChannelIdentityGateway = () => {
   channelIdentityGatewayBound = true;
 };
 
-let pingTimer: ReturnType<typeof setInterval> | null = null;
-let latencyTimer: ReturnType<typeof setInterval> | null = null;
+let pingTimer: number | null = null;
+let latencyTimer: number | null = null;
 let channelMembersCountRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let channelListRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let focusListenersBound = false;
@@ -1048,10 +1048,10 @@ const LATENCY_PROBE_TIMEOUT = 8000;
 const WS_FOREGROUND_PROBE_TIMEOUT_MS = 7000;
 const WS_FOREGROUND_RECOVERY_DEBOUNCE_MS = 1500;
 const WS_DEFAULT_API_TIMEOUT_MS = 15_000;
-let wsForegroundProbeTimer: ReturnType<typeof setTimeout> | null = null;
+let wsForegroundProbeTimer: number | null = null;
 let wsLastForegroundRecoverAt = 0;
 
-let wsReconnectTimer: ReturnType<typeof setInterval> | null = null;
+let wsReconnectTimer: number | null = null;
 let wsConnectionEpoch = 0;
 let wsConnectInFlight = false;
 let wsReconnectSuppressedEpoch = 0;
@@ -1929,7 +1929,7 @@ export const useChatStore = defineStore({
         && this.messageInsertTarget.messageId === String(messageId || '').trim();
     },
 
-    async sendAPI<T = any>(api: string, data: APIMessage, options?: { timeoutMs?: number }): Promise<T> {
+    async sendAPI<T = any>(api: string, data: object, options?: { timeoutMs?: number }): Promise<T> {
       const doSend = () => {
         const echo = nanoid();
         return new Promise((resolve, reject) => {
@@ -3873,14 +3873,14 @@ export const useChatStore = defineStore({
             nextCache[roleId] = [];
           }
           this.channelRoleCache = nextCache;
-        } finally {
-          for (const roleId of toFetch) {
-            if (inFlightRolePermLoads.get(roleId) === task) {
-              inFlightRolePermLoads.delete(roleId);
-            }
+        }
+      })().finally(() => {
+        for (const roleId of toFetch) {
+          if (inFlightRolePermLoads.get(roleId) === task) {
+            inFlightRolePermLoads.delete(roleId);
           }
         }
-      })();
+      });
       for (const roleId of toFetch) {
         inFlightRolePermLoads.set(roleId, task);
       }

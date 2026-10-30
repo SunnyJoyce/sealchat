@@ -332,6 +332,10 @@ Reuse the existing frontend stack.
 
 ## Validation
 
+`npm run type-check` checks both the DOM application and the font Web Worker through separate configurations. Keep the Vite-generated global declarations referenced from `env.d.ts`. TypeScript 5.6 is required for the current Vue declarations; do not replace these checks with `build-only` or omit the worker.
+
+2026-10-30: a failed clue-board refresh can leave `loadFailed=false` when an older document exists. Retry must also check the returned post-load status; do not remove that check to bypass TypeScript's pre-await narrowing. Run `node scripts/world-clue-board-retry-regression.cjs` for initial/refresh failure and recovery.
+
 For frontend changes, run:
 
 ```bash

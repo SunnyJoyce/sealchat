@@ -3548,6 +3548,7 @@ func apiMessageUpdateVersioned(ctx *ChatContext, data *messageUpdatePayload) (an
 		icModeChanged = true
 	}
 	if prevContent == newContent && !icModeChanged && !identityChanged && !whisperRecipientsChanged && data.AppearancePatch == nil {
+		msg.ResolveWhisperTargetDisplayNames()
 		if err := db.Transaction(func(tx *gorm.DB) error {
 			if err := model.MessageUpdateTx(tx, msg.ID, data.ExpectedVersion, map[string]any{"updated_at": msg.UpdatedAt}); err != nil {
 				return err
@@ -3626,6 +3627,8 @@ func apiMessageUpdateVersioned(ctx *ChatContext, data *messageUpdatePayload) (an
 			updates[key] = value
 		}
 	}
+	// Resolve recipient names after recipient/IC changes, before taking the writer.
+	msg.ResolveWhisperTargetDisplayNames()
 	err = db.Transaction(func(tx *gorm.DB) error {
 		if ownerChanged {
 			if authorMember.ID == "" {

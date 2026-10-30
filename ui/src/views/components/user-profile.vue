@@ -824,7 +824,7 @@ onBeforeUnmount(() => {
       <!-- 邮箱绑定表单 -->
       <template v-if="showEmailBind">
         <n-form-item label="邮箱地址">
-          <n-input v-model:value="emailBindForm.email" placeholder="请输入邮箱地址" type="email" />
+          <n-input v-model:value="emailBindForm.email" placeholder="请输入邮箱地址" :input-props="{ type: 'email' }" />
         </n-form-item>
         <n-form-item v-if="captchaMode === 'local' && !captchaVerified" label="图形验证码">
           <div class="flex w-full items-center gap-3">

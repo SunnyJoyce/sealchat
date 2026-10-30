@@ -1015,7 +1015,7 @@ const headerMenuOptions = computed(() => [
     label: t('headerMenu.logout'),
     key: 'logout',
   },
-].filter(Boolean));
+].filter((item) => item !== null));
 
 const handleHeaderMenuSelect = async (key: string | number) => {
   switch (key) {

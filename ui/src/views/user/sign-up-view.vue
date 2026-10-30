@@ -622,7 +622,7 @@ onBeforeUnmount(() => {
 
           <template v-if="emailAuthEnabled">
             <n-form-item label="邮箱地址">
-              <n-input v-model:value="form.email" type="email" placeholder="邮箱地址" @keydown.enter.prevent />
+              <n-input v-model:value="form.email" :input-props="{ type: 'email' }" placeholder="邮箱地址" @keydown.enter.prevent />
             </n-form-item>
             <div v-if="emailError" class="auth-error">{{ emailError }}</div>
 

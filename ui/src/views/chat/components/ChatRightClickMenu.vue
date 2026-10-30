@@ -48,7 +48,7 @@ const contextMenuTheme = computed(() => (display.palette === 'night' ? 'default 
 // 消息收藏悬浮窗（z-index 1210）打开时仍需能从右键菜单收藏消息。
 const contextMenuZIndex = computed(() => Math.max(Number(chat.messageMenu.optionsComponent.zIndex) || 0, 1220))
 const contextMenuOptions = computed<MenuOptions>(() => ({
-  ...chat.messageMenu.optionsComponent,
+  ...(chat.messageMenu.optionsComponent as MenuOptions),
   zIndex: contextMenuZIndex.value,
   theme: contextMenuTheme.value,
   customClass: `sc-overlay sc-context-menu sc-message-context-menu ${contextMenuClass.value}`,
