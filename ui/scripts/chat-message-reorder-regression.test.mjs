@@ -7,8 +7,13 @@ import ts from 'typescript';
 const source = readFileSync(new URL('../src/views/chat/chat.vue', import.meta.url), 'utf8').match(/<script setup[^>]*>([\s\S]*?)<\/script>/)[1];
 const ast = ts.createSourceFile('chat.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const declaration = (name) => {
-  const statement = ast.statements.find((item) => ts.isVariableStatement(item)
-    && item.declarationList.declarations.some((entry) => entry.name.getText(ast) === name));
+  let statement;
+  const visit = (item) => {
+    if (ts.isVariableStatement(item)
+      && item.declarationList.declarations.some((entry) => entry.name.getText(ast) === name)) statement = item;
+    else ts.forEachChild(item, visit);
+  };
+  visit(ast);
   assert.ok(statement, `missing declaration: ${name}`);
   return statement.getText(ast);
 };
@@ -23,7 +28,9 @@ const deferred = () => {
 };
 const names = ['compareByDisplayOrder', 'sortRowsByDisplayOrder', 'getMessageDisplayOrderValue', 'deriveLocalDisplayOrder',
   'restoreMessageDisplayOrder', 'captureMessageReadingPosition', 'displayOrderRevision', 'displayOrderRefresh', 'displayOrderDirty',
-  'invalidateDisplayOrderRefresh', 'refreshLoadedDisplayOrders', 'applyReorderPayload', 'finalizeDrag'];
+  'invalidateDisplayOrderRefresh', 'refreshLoadedDisplayOrders', 'applyReorderPayload', 'finalizeDrag',
+  'latestMessagesFetchEpoch', 'latestMessagesRefetchQueued', 'scheduleLatestMessagesRefetch', 'fetchLatestMessages',
+  'upsertMessage', 'handleMessageUpdated'];
 const harness = () => {
   const errors = [];
   const state = {
@@ -40,12 +47,84 @@ const harness = () => {
     message: { error: (text) => errors.push(text) }, errors,
     chatEvent: { emit() {} }, nextTick: (fn) => Promise.resolve().then(fn),
     nanoid: () => 'op', console,
+    messageFilterSignature: { value: '' }, detachedRealtimeRevision: 0, detachedRealtimeMessageKeys: new Set(),
+    resetWindowState() {}, resetTypingPreview() {}, INITIAL_MESSAGE_LOAD_LIMIT: 30,
+    buildMessageFilterOptions: () => ({}), normalizeMessageList: (items) => items.map((item) => ({ ...item })),
+    normalizeMessageShape: (item) => ({ ...item }), validateMessageInsertTarget() {}, applyCursorUpdate() {},
+    computeAfterCursorFromRows() {}, scrollToBottom() {}, showButton: { value: false },
+    autoFillIfNeeded: async () => {}, tryAutoRestoreSessionDraft() {},
+    upsertPinnedMessage() {}, removePinnedMessage() {}, removeTypingPreview() {},
   };
   Object.defineProperty(state, 'visibleRows', { get: () => state.rows });
   state.api = vm.runInNewContext(compile(names.map(declaration).join('\n') + '\n({' + names.join(',') + '});'), state);
   return state;
 };
 const ids = (state) => Array.from(state.rows.value, (item) => item.id).join('');
+
+test('an empty initial load retries when its response predates a reset', async () => {
+  const state = harness();
+  state.rows.value = [];
+  const first = deferred();
+  const retry = deferred();
+  let requests = 0;
+  state.chat.messageList = () => ++requests === 1 ? first.promise : retry.promise;
+  const loading = state.api.fetchLatestMessages();
+  state.api.applyReorderPayload({ reset: true });
+  await state.api.refreshLoadedDisplayOrders();
+  first.resolve({ data: messages().map((item) => ({ ...item, displayOrder: item.displayOrder + 1768754295000 })) });
+  assert.equal(await loading, false);
+  assert.equal(requests, 2);
+  assert.equal(state.rows.value.length, 0, 'stale rows must never be rendered');
+  retry.resolve({ data: messages().map((item) => ({ ...item, displayOrder: item.id === 'd' ? 1536 : item.displayOrder })) });
+  await new Promise(setImmediate);
+  assert.equal(ids(state), 'adbc');
+  assert.equal(state.messageWindow.loadingLatest, false);
+  assert.equal(requests, 2, 'the retry must not loop');
+});
+
+for (const failedFirst of [false, true]) {
+  test(`an edit ${failedFirst ? 'after a failed' : 'during a'} reset preserves row order until synchronization`, async () => {
+    const state = harness();
+    state.rows.value.forEach((item) => { item.displayOrder += 1768754295000; });
+    const read = deferred();
+    let requests = 0;
+    state.chat.messageDisplayOrders = () => {
+      requests++;
+      if (failedFirst && requests === 1) return Promise.reject(new Error('offline'));
+      return read.promise;
+    };
+    const initial = state.api.refreshLoadedDisplayOrders();
+    if (failedFirst) await initial;
+    state.api.handleMessageUpdated({ channel: { id: 'channel' }, message: { id: 'c', displayOrder: 3072, content: 'edited' } });
+    assert.equal(ids(state), 'abcd');
+    assert.equal(state.rows.value.find((item) => item.id === 'c').content, 'edited');
+    assert.equal(requests, failedFirst ? 2 : 1, 'edits must reuse or retry the existing synchronization');
+    const syncing = state.api.refreshLoadedDisplayOrders();
+    read.resolve(messages().map((item) => ({ id: item.id, display_order: item.id === 'd' ? 1536 : item.displayOrder })));
+    await syncing;
+    assert.equal(ids(state), 'adbc');
+    assert.equal(state.rows.value.find((item) => item.id === 'c').content, 'edited');
+  });
+}
+
+test('a new message during reset is synchronized before sorting existing rows', async () => {
+  const state = harness();
+  state.rows.value.forEach((item) => { item.displayOrder += 1768754295000; });
+  const first = deferred();
+  let requests = 0;
+  state.chat.messageDisplayOrders = () => ++requests === 1 ? first.promise : Promise.resolve([
+    ...messages().map((item) => ({ id: item.id, display_order: item.displayOrder })),
+    { id: 'e', display_order: 1536 },
+  ]);
+  const syncing = state.api.refreshLoadedDisplayOrders();
+  state.api.upsertMessage({ id: 'e', displayOrder: 1536, content: 'inserted' });
+  assert.equal(ids(state), 'abcde');
+  assert.equal(requests, 1);
+  first.resolve(messages().map((item) => ({ id: item.id, display_order: item.displayOrder })));
+  await syncing;
+  assert.equal(requests, 2, 'the new ID must be included in the complete refresh');
+  assert.equal(ids(state), 'aebcd');
+});
 
 test('rebalance refresh replaces every loaded order before sorting', async () => {
   const state = harness();

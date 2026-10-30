@@ -9999,8 +9999,12 @@ const upsertMessage = (incoming?: Message) => {
   } else {
     rows.value.push(incoming);
   }
-  sortRowsByDisplayOrder();
-  updateWindowAnchorsFromRows();
+  if (displayOrderDirty) {
+    void refreshLoadedDisplayOrders();
+  } else {
+    sortRowsByDisplayOrder();
+    updateWindowAnchorsFromRows();
+  }
   upsertPinnedMessage(incoming);
 };
 
@@ -15128,10 +15132,12 @@ const fetchLatestMessages = async (
   const fetchEpoch = ++latestMessagesFetchEpoch;
   const filterSignatureAtStart = messageFilterSignature.value;
   const realtimeRevisionAtStart = detachedRealtimeRevision;
+  const orderRevisionAtStart = displayOrderRevision;
   const isStale = () => (
     fetchEpoch !== latestMessagesFetchEpoch
     || chat.curChannel?.id !== channelIdAtStart
     || messageFilterSignature.value !== filterSignatureAtStart
+    || displayOrderRevision !== orderRevisionAtStart
   );
   console.info('[channel-load] messages-fetch-start', {
     channelId: channelIdAtStart,

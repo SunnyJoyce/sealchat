@@ -202,7 +202,7 @@ Before modifying a WebSocket event:
 
 Do not rename events as part of cleanup.
 
-Channel display-order rebalancing broadcasts `message-reordered` with `reorder.reset=true` after commit (immediately after the existing nontransactional insertion rebalance). Reuse the public reorder event; for whispers, send a separate channel invalidation without message IDs or content. Clients read their loaded IDs through the read-only `message.order.get` action, limited to 200 IDs per request and the normal channel/whisper access rules.
+Channel display-order rebalancing broadcasts `message-reordered` with `reorder.reset=true` after commit (immediately after the existing nontransactional insertion rebalance). Reuse the public reorder event; for whispers, send a separate channel invalidation without message IDs or content to both ordinary connections and configured event bots. Clients read their loaded IDs through the read-only `message.order.get` action, limited to 200 IDs per request and the normal channel/whisper access rules.
 
 Do not reorder persistence and broadcast side effects without understanding the current delivery guarantees.
 

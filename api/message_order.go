@@ -31,11 +31,13 @@ func hasDisplayOrderSpace(lower, upper float64, count int) bool {
 func broadcastDisplayOrderReset(ctx *ChatContext, channelID string) {
 	// Rebalancing also changes private/deleted rows. Never broadcast their IDs,
 	// content or visibility: each client refreshes only its already-loaded IDs.
-	ctx.BroadcastEventInChannel(channelID, &protocol.Event{
+	ev := &protocol.Event{
 		Type:    protocol.EventMessageReordered,
 		Channel: &protocol.Channel{ID: channelID},
 		Reorder: &protocol.MessageReorder{ChannelID: channelID, Reset: true},
-	})
+	}
+	ctx.BroadcastEventInChannel(channelID, ev)
+	ctx.BroadcastEventInChannelForBot(channelID, ev)
 }
 
 type messageDisplayOrder struct {
