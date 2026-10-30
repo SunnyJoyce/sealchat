@@ -1,6 +1,6 @@
 # 角色卡模板开发文档
 
-本文档面向需要编写和维护人物卡 HTML 模板的开发者，覆盖模板运行机制、可用 API、事件约定、调试建议，一个实现基础功能的COC人物卡模板示例。
+本文档面向需要编写和维护人物卡 HTML 模板的开发者，覆盖模板运行机制、规则类型、外部插件依赖、可用 API、事件约定和调试方式，并提供一个基础 COC 人物卡模板示例。
 
 ---
 
@@ -115,6 +115,47 @@
 
 - `HP{生命值} SAN{理智}`
 - `STR{力量} DEX{敏捷} CON{体质}`
+
+#### 2.0.4 规则类型与 SealDice 插件依赖
+
+人物卡和模板使用 `sheetType` 标识规则类型。`sheetType` 仍是运行时唯一的规则类型键。`ui/src/utils/characterSheetType.ts` 只维护内置类型名称和别名，不维护具体插件依赖。
+
+模板需要 SealDice 插件时，在 HTML 中加入静态 manifest。SealChat 只解析这段 JSON，不执行其中的脚本。第三方模板和内置模板使用同一格式。
+
+~~~html
+<script type="application/json" data-sealchat-template-manifest>
+{
+  "version": 1,
+  "sheetType": "shinobigami",
+  "label": "忍神",
+  "integration": {
+    "provider": "sealdice",
+    "probe": {
+      "command": "。sbg h",
+      "matchMode": "contains",
+      "expected": "忍神掷骰插件",
+      "timeoutMs": 5000
+    },
+    "plugin": {
+      "name": "忍神掷骰插件",
+      "acquireText": "可在 SealChat 用户群获取"
+    }
+  }
+}
+</script>
+~~~
+
+`version` 当前只能为 `1`。`sheetType` 最长 64 个字符。`matchMode` 只支持 `equals` 和 `contains`。`command` 和 `expected` 最长 200 个字符，`command` 不能包含换行。`timeoutMs` 的范围是 1000～15000 毫秒。`plugin.name` 最长 100 个字符。`description` 和 `acquireText` 最长 300 个字符。`acquireUrl` 最长 2048 个字符，只接受 `http` 和 `https`。
+
+模板库已有的 `sheetType` 优先于 manifest。导入 HTML 文件时，SealChat 可以读取 manifest 的 `sheetType` 并自动填入模板类型。manifest 不新增数据库字段，也不会改变现有人物卡协议。
+
+宿主使用现有 `bot.interact` 发送测试命令。测试命令和捕获到的回复不会写入普通聊天消息。内置模板内容经过 SealChat 校验后可以自动探测。普通第三方模板不会自动执行 manifest 提供的命令，界面先显示依赖说明，用户点击“检测插件”后才发起探测。
+
+探测结果分为 5 种状态。`unknown` 表示尚未检测，`checking` 表示正在检测，`available` 表示回复符合预期。`missing` 表示成功收到文本回复，但回复不符合预期。`unavailable` 表示当前无法确认。超时、`BOT_INTERACTION_BUSY`、BOT 离线、权限错误、WebSocket 断开和空文本回复都属于 `unavailable`。
+
+缓存按频道、实际 BOT、`sheetType` 和插件探测声明隔离。同一个规则的两个模板如果声明不同命令或关键词，不会复用错误的检测结果。BOT 私聊没有 `primaryBotId` 时，使用私聊对端 BOT 的用户 ID。
+
+自动探测成功后不显示提示。只有明确探测为 `missing` 时才显示缺失提醒。第三方模板在首次检测前会显示普通依赖说明，这不是错误提示。普通人物卡窗口、独立窗口和只读快照复用同一套解析、缓存和提示逻辑。
 
 ### 2.1 sealchat.onUpdate(callback)
 
@@ -779,6 +820,9 @@ sealchat.updateAttrs({
 - 掷骰分流（默认弹窗 vs 模板直发）：ui/src/views/chat/components/character-sheet/CharacterSheetManager.vue
 - 默认掷骰弹窗：ui/src/views/chat/components/character-sheet/DiceRollPopover.vue
 - 默认模板源码（通用 + COC）：ui/src/stores/characterSheet.ts
+- 规则类型与插件依赖元数据：ui/src/utils/characterSheetType.ts
+- 插件探测状态与缓存：ui/src/stores/characterSheetIntegration.ts
+- 插件依赖提示组件：ui/src/views/chat/components/CharacterSheetIntegrationNotice.vue
 
 另外为了方便参考，提取了源码中默认人物卡模版的部分保存在：doc/template/
 

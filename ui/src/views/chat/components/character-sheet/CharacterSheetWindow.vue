@@ -76,6 +76,12 @@
       </div>
     </div>
 
+    <CharacterSheetIntegrationNotice
+      :sheet-type="windowData.sheetType"
+      :template-html="windowData.template"
+      :channel-id="windowData.channelId"
+      :auto-check="integrationAutoCheck"
+    />
     <div class="sheet-window__content">
       <div class="sheet-window__flipper">
         <div class="sheet-window__front">
@@ -183,6 +189,7 @@ import { useCharacterSheetStore } from '@/stores/characterSheet';
 import { useCharacterCardTemplateStore, type CharacterCardTemplateMode } from '@/stores/characterCardTemplate';
 import { resolveAttachmentUrl } from '@/composables/useAttachmentResolver';
 import IframeSandbox, { type SealChatEvent } from './IframeSandbox.vue';
+import CharacterSheetIntegrationNotice from '../CharacterSheetIntegrationNotice.vue';
 import { copyTextWithFallback } from '@/utils/clipboard';
 import {
   buildInternalSurfaceResourceKey,
@@ -248,6 +255,9 @@ let dragEventTarget: HTMLElement | null = null;
 let resizeEventTarget: HTMLElement | null = null;
 
 const windowData = computed(() => sheetStore.windows[props.windowId]);
+const integrationAutoCheck = computed(() => (
+  templateStore.isBuiltinTemplateContent(windowData.value?.template)
+));
 
 const windowStyle = computed(() => {
   const win = windowData.value;

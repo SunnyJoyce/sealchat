@@ -4,6 +4,7 @@ import cocTemplateHtml from '../../../doc/template/sealchat-default-template-v3-
 import shinobigamiTemplateHtml from '../../../doc/template/sealchat-shinobigami-template-v1.html?raw';
 import { api } from './_config';
 import { useUserStore } from './user';
+import { normalizeCharacterSheetType as normalizeSheetType } from '@/utils/characterSheetType';
 
 export type CharacterCardTemplateMode = 'managed' | 'detached';
 export type CharacterCardTemplateAccess = 'owner' | 'world_shared' | 'platform';
@@ -122,16 +123,13 @@ const BUILTIN_CHARACTER_CARD_TEMPLATES: BuiltinCharacterCardTemplate[] = [
   },
 ];
 
-const normalizeSheetType = (value?: string) => {
-  const normalized = (value || '').trim().toLowerCase();
-  if (normalized === 'shinobigami' || normalized === '忍神') {
-    return 'shinobigami';
-  }
-  if (normalized === 'coc') return 'coc7';
-  if (normalized === 'dnd5' || normalized === 'dnd') return 'dnd5e';
-  return normalized;
-};
 const isBuiltInSheetType = (value?: string) => BUILTIN_SHEET_TYPES.has(normalizeSheetType(value));
+
+const isBuiltinTemplateContent = (content?: string) => {
+  const normalized = String(content || '').trim();
+  if (!normalized) return false;
+  return BUILTIN_CHARACTER_CARD_TEMPLATES.some(item => item.content === normalized);
+};
 
 const isLegacyBuiltinTemplate = (
   template: CharacterCardTemplate,
@@ -764,6 +762,7 @@ export const useCharacterCardTemplateStore = defineStore('characterCardTemplate'
     getTemplatesBySheetType,
     getSheetDefaultTemplate,
     getBuiltinTemplateBySheetType,
+    isBuiltinTemplateContent,
     isSameSheetType,
     getPreferredTemplateBySheetType,
     getGlobalDefaultTemplate,

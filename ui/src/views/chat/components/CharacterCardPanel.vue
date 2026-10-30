@@ -35,6 +35,12 @@ import AvatarEditor from '@/components/AvatarEditor.vue';
 import type { ChannelIdentity } from '@/types';
 import type { MessageVisibilityScope } from '@/stores/displayAvatarVisibility';
 import { openCharacterSheetRuntime } from './character-sheet/openCharacterSheetRuntime';
+import CharacterSheetIntegrationNotice from './CharacterSheetIntegrationNotice.vue';
+import {
+  CHARACTER_SHEET_TYPES,
+  getCharacterSheetTypeMeta,
+  parseCharacterSheetTemplateManifest,
+} from '@/utils/characterSheetType';
 
 const props = defineProps<{
   visible: boolean;
@@ -1488,19 +1494,9 @@ const cardSwitchingId = ref('');
 
 const setTemplateSheetType = (value: string) => {
   const normalized = (value || '').trim();
-  const lower = normalized.toLowerCase();
-  if (lower === 'coc7' || lower === 'coc') {
-    templateSheetTypePreset.value = 'coc7';
-    templateSheetTypeCustom.value = '';
-    return;
-  }
-  if (lower === 'dnd5e' || lower === 'dnd5' || lower === 'dnd') {
-    templateSheetTypePreset.value = 'dnd5e';
-    templateSheetTypeCustom.value = '';
-    return;
-  }
-  if (lower === 'shinobigami' || normalized === '忍神') {
-    templateSheetTypePreset.value = 'shinobigami';
+  const meta = getCharacterSheetTypeMeta(normalized);
+  if (meta) {
+    templateSheetTypePreset.value = meta.key;
     templateSheetTypeCustom.value = '';
     return;
   }
@@ -1545,7 +1541,10 @@ const handleTemplateHtmlUpload = async (event: Event) => {
   input.value = '';
   if (!file) return;
   try {
-    templateContent.value = await readHtmlFile(file);
+    const content = await readHtmlFile(file);
+    templateContent.value = content;
+    const manifest = parseCharacterSheetTemplateManifest(content);
+    if (manifest?.sheetType) setTemplateSheetType(manifest.sheetType);
     message.success('HTML 文件已读取');
   } catch (error: any) {
     message.error(error?.message || '读取 HTML 文件失败');
@@ -1715,21 +1714,9 @@ const creating = ref(false);
 const DETACHED_TEMPLATE_VALUE = '__detached__';
 
 const sheetTypeOptions = [
-  { label: 'COC7', value: 'coc7' },
-  { label: 'DND5', value: 'dnd5e' },
-  { label: '忍神', value: 'shinobigami' },
+  ...CHARACTER_SHEET_TYPES.map(meta => ({ label: meta.label, value: meta.key })),
   { label: '自定义', value: 'custom' },
 ];
-
-const builtinSheetTypeAliases = new Set([
-  'coc7',
-  'coc',
-  'dnd5e',
-  'dnd5',
-  'dnd',
-  'shinobigami',
-  '忍神',
-]);
 
 const newCardCustomSheetTypeOptions = computed(() => {
   const seen = new Set<string>();
@@ -1738,7 +1725,7 @@ const newCardCustomSheetTypeOptions = computed(() => {
     .map(item => String(item.sheetType || '').trim())
     .filter(sheetType => {
       const key = sheetType.toLowerCase();
-      if (!sheetType || builtinSheetTypeAliases.has(key) || seen.has(key)) return false;
+      if (!sheetType || getCharacterSheetTypeMeta(sheetType) || seen.has(key)) return false;
       seen.add(key);
       return true;
     })
@@ -1761,18 +1748,9 @@ const resolveSheetType = (preset: string, custom: string) => {
 const setNewCardSheetType = (value: string) => {
   const normalized = (value || '').trim();
   const lower = normalized.toLowerCase();
-  if (lower === 'coc7' || lower === 'coc') {
-    newCardSheetTypePreset.value = 'coc7';
-    newCardSheetTypeCustom.value = '';
-    return;
-  }
-  if (lower === 'dnd5e' || lower === 'dnd5' || lower === 'dnd') {
-    newCardSheetTypePreset.value = 'dnd5e';
-    newCardSheetTypeCustom.value = '';
-    return;
-  }
-  if (lower === 'shinobigami' || normalized === '忍神') {
-    newCardSheetTypePreset.value = 'shinobigami';
+  const meta = getCharacterSheetTypeMeta(normalized);
+  if (meta) {
+    newCardSheetTypePreset.value = meta.key;
     newCardSheetTypeCustom.value = '';
     return;
   }
@@ -1791,6 +1769,18 @@ const setNewCardSheetType = (value: string) => {
 const newCardSheetType = computed(() => resolveSheetType(
   newCardSheetTypePreset.value,
   newCardSheetTypeCustom.value,
+));
+
+const selectedNewCardTemplate = computed(() => (
+  newCardTemplateId.value && newCardTemplateId.value !== DETACHED_TEMPLATE_VALUE
+    ? templateStore.getTemplateById(newCardTemplateId.value)
+    : null
+));
+const newCardTemplateHtml = computed(() => (
+  selectedNewCardTemplate.value?.content || sheetStore.getDefaultTemplate(newCardSheetType.value)
+));
+const newCardTemplateAutoCheck = computed(() => (
+  templateStore.isBuiltinTemplateContent(newCardTemplateHtml.value)
 ));
 
 const newCardTemplateOptions = computed(() => [
@@ -1840,7 +1830,8 @@ const syncNewCardTemplateForSheetType = () => {
 
 const handleNewCardTemplateChange = (templateId: string | number | null) => {
   const selectedTemplate = templateStore.getTemplateById(String(templateId || '').trim());
-  const sheetType = selectedTemplate?.sheetType?.trim();
+  const sheetType = selectedTemplate?.sheetType?.trim()
+    || parseCharacterSheetTemplateManifest(selectedTemplate?.content)?.sheetType;
   if (!sheetType) return;
   setNewCardSheetType(sheetType);
 };
@@ -1871,8 +1862,10 @@ const handleCreateCard = async () => {
   const selectedTemplate = newCardTemplateId.value && newCardTemplateId.value !== DETACHED_TEMPLATE_VALUE
     ? templateStore.getTemplateById(newCardTemplateId.value)
     : null;
-  if (selectedTemplate?.sheetType?.trim()) {
-    setNewCardSheetType(selectedTemplate.sheetType);
+  const selectedTemplateSheetType = selectedTemplate?.sheetType?.trim()
+    || parseCharacterSheetTemplateManifest(selectedTemplate?.content)?.sheetType;
+  if (selectedTemplateSheetType) {
+    setNewCardSheetType(selectedTemplateSheetType);
   }
   const sheetType = newCardSheetType.value;
   if (!sheetType) {
@@ -3006,6 +2999,13 @@ defineExpose({ openCardById });
           @update:value="handleNewCardTemplateChange"
         />
       </n-form-item>
+      <CharacterSheetIntegrationNotice
+        v-if="createModalVisible"
+        :sheet-type="newCardSheetType"
+        :template-html="newCardTemplateHtml"
+        :channel-id="resolvedChannelId"
+        :auto-check="newCardTemplateAutoCheck"
+      />
       <n-form-item label="人物卡头像">
         <div class="new-card-avatar-picker">
           <n-button secondary :disabled="characterApiDisabled || creating" @click="handleNewCardAvatarTrigger">

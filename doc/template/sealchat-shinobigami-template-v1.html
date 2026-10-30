@@ -4,6 +4,26 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script type="application/json" data-sealchat-template-manifest>
+  {
+    "version": 1,
+    "sheetType": "shinobigami",
+    "label": "忍神",
+    "integration": {
+      "provider": "sealdice",
+      "probe": {
+        "command": "。sbg h",
+        "matchMode": "contains",
+        "expected": "忍神掷骰插件",
+        "timeoutMs": 5000
+      },
+      "plugin": {
+        "name": "忍神掷骰插件",
+        "acquireText": "可在 SealChat 用户群获取"
+      }
+    }
+  }
+  </script>
   <style>
     :root {
       /* 和风色彩系统 */
