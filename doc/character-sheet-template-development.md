@@ -29,6 +29,8 @@
 - action 仅支持：
   - ROLL_DICE（掷骰请求）
   - UPDATE_ATTRS（属性更新）
+  - EDIT_START / EDIT_END（现有输入编辑锁，由宿主注入检测）
+  - FLUSH_ATTRS（等待当前窗口的待保存属性持久化）
 
 宿主在窗口层接收后分发：
 
@@ -187,6 +189,26 @@ sealchat.roll('.ra {skill}', '侦查检定', { skill: '侦查' });
 ~~~js
 sealchat.updateAttrs({ 力量: 65, 敏捷: 70 });
 ~~~
+
+#### 等待属性持久化：sealchat.flushAttrs()
+
+宿主向人物卡 iframe 注入此方法，返回 Promise。它立即执行当前窗口延迟中的属性保存，复用正在执行的保存，并等待期间合并的新属性也保存成功。没有待保存属性时直接成功；保存失败或超时则 reject。只读人物卡不会因此获得写权限。
+
+依赖服务端人物卡状态的指令（例如匕首之心 `.dd/.ddr` 的希望结算）应先提交模板自己的待保存内容，再等待宿主持久化，成功后才掷骰：
+
+~~~js
+try {
+  await flushSave(); // 模板自己的保存方法，调用 sealchat.updateAttrs(...)
+  await sealchat.flushAttrs();
+  sealchat.roll('.dd 敏捷+2 hope -- 原因', '敏捷检定');
+} catch (error) {
+  // 向用户显示错误；本次不掷骰，可重试同步。
+}
+~~~
+
+普通不依赖服务端属性的 `.r` 伤害指令无需等待。`ROLL_DICE` 和 `UPDATE_ATTRS` 的原有行为不变。
+
+底层请求仍为 `SEALCHAT_EVENT`，`action: 'FLUSH_ATTRS'`，`payload: { requestId: string }`。宿主仅处理发送 iframe 所属窗口，并回复 `{ type: 'SEALCHAT_ATTRS_FLUSHED', windowId, requestId, ok: boolean, error?: string }`。注入方法验证父窗口来源及窗口 ID，超时或页面关闭会清理待处理请求。
 
 ### 2.4 sealchat.setRollDispatchMode(mode) 和 sealchat.setRollMode(mode)
 

@@ -89,6 +89,7 @@
             :html="windowData.template"
             :data="iframeData"
             :window-id="windowId"
+            :flush-attrs="flushAttrs"
             @iframe-event="handleIframeEvent"
           />
         </div>
@@ -288,6 +289,8 @@ const iframeData = computed(() => {
 const emit = defineEmits<{
   rollRequest: [payload: SealChatEvent['payload']['roll']];
 }>();
+
+const flushAttrs = () => sheetStore.flushAttrsSync(props.windowId);
 
 const handleIframeEvent = (event: SealChatEvent) => {
   if (event.action === 'ROLL_DICE' && event.payload.roll) {
