@@ -14719,7 +14719,7 @@ chatEvent.on('channel-presence-updated', (e?: Event) => {
   if (!channelId) {
     return;
   }
-  const presenceList = Array.isArray(e?.presence) ? (e?.presence ?? []) : [];
+  const presenceList = Array.isArray(e?.presence) ? e.presence : [];
   chat.patchChannelAttributes(channelId, {
     membersCount: presenceList.length,
   } as any);

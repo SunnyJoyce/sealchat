@@ -15,9 +15,6 @@ export async function dialogAskConfirm(dialog: DialogApiInjection, title: string
       },
       onNegativeClick: () => {
         resolve(false);
-      },
-      onClose: () => {
-        resolve(false);
       }
     });
   });

@@ -1897,7 +1897,7 @@ const handleCreateCard = async () => {
         label: '模板应用',
         task: templateStore.bindCardToTemplate({
           channelId: resolvedChannelId.value,
-          externalCardId: createdCardId,
+          externalCardId: created.id,
           cardName: created.name || newCardName.value.trim(),
           sheetType: created.sheetType || sheetType,
           templateId: newCardTemplateId.value,
@@ -1908,7 +1908,7 @@ const handleCreateCard = async () => {
         label: '模板应用',
         task: templateStore.bindCardToDetachedTemplate({
           channelId: resolvedChannelId.value,
-          externalCardId: createdCardId,
+          externalCardId: created.id,
           cardName: created.name || newCardName.value.trim(),
           sheetType: created.sheetType || sheetType,
           templateSnapshot: sheetStore.getDefaultTemplate(sheetType),

@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { computed, useAttrs } from 'vue'
 import { NSelect as NSelectBase } from 'naive-ui'
-import type { SelectOption } from 'naive-ui'
+import type { SelectOption as SelectOptionLike } from 'naive-ui'
 import { matchText, usePinyinReadyVersion } from '@/utils/pinyinMatch'
 
 defineOptions({ inheritAttrs: false })
-
-type SelectOptionLike = SelectOption
 
 // Forward the select's public props; Naive UI supplies their runtime defaults.
 const attrs = useAttrs() as InstanceType<typeof NSelectBase>['$props']
