@@ -37,6 +37,7 @@ const {
   matchCharacterSheetProbeResponse,
 } = metadata;
 const shinobigamiHtml = readFileSync(new URL('../../doc/template/sealchat-shinobigami-template-v1.html', import.meta.url), 'utf8');
+const daggerheartHtml = readFileSync(new URL('../../doc/template/sealchat-daggerheart-template-v1.html', import.meta.url), 'utf8');
 
 function setup(interact = async () => ({ ok: true, content: '忍神掷骰插件 v1 帮助' })) {
   pinia.setActivePinia(pinia.createPinia());
@@ -110,6 +111,70 @@ test('contains 与 equals 只按 manifest 声明的文本规则匹配', () => {
   const exact = { ...probe, matchMode: 'equals' };
   assert.equal(matchCharacterSheetProbeResponse(exact, '忍神掷骰插件'), true);
   assert.equal(matchCharacterSheetProbeResponse(exact, '欢迎使用忍神掷骰插件！'), false);
+});
+
+test('Daggerheart 别名、manifest 和快照预设复用统一注册表', () => {
+  const presets = loadTs('../src/utils/characterSnapshotTemplatePresets.ts', {
+    '@/utils/characterSheetType': metadata,
+  });
+  for (const alias of ['daggerheart', 'dh', '匕首之心', ' DH ']) {
+    assert.equal(normalizeCharacterSheetType(alias), 'daggerheart');
+    assert.equal(getCharacterSheetTypeMeta(alias).label, '匕首之心');
+    assert.equal(presets.getCharacterSnapshotTemplatePreset(alias), 'daggerheart');
+    const integration = getCharacterSheetTemplateIntegration(daggerheartHtml, alias);
+    assert.equal(integration.provider, 'sealdice');
+    assert.equal(integration.probe.command, '.dd help');
+    assert.equal(integration.probe.matchMode, 'contains');
+    assert.equal(integration.probe.expected, '.dd：动作掷骰；.ddr：反应掷骰。');
+    assert.equal(integration.plugin.acquireUrl, 'https://github.com/ZZZZzzzzac/Daggerheart_sealdice');
+  }
+  assert.equal(presets.CHARACTER_SNAPSHOT_TEMPLATE_PRESET_LABELS.daggerheart, '匕首之心');
+  assert.equal(presets.CHARACTER_SNAPSHOT_OVERLAY_TEMPLATE_PRESETS.daggerheart.items.length, 4);
+  assert.equal(presets.AVATAR_WORLD_STATE_OVERLAY_TEMPLATE_PRESETS.daggerheart.items.length, 4);
+});
+
+test('Daggerheart 插件帮助匹配成功，明确不匹配才缺失，通信失败不能判为缺失', async () => {
+  for (const [response, status] of [
+    [{ ok: true, content: '帮助：.dd：动作掷骰；.ddr：反应掷骰。更多指令' }, 'available'],
+    [{ ok: true, content: '未知指令' }, 'missing'],
+    [{ ok: false, content: '' }, 'unavailable'],
+  ]) {
+    const { rawStore, calls } = setup(async () => response);
+    assert.equal(await rawStore.check('dh', daggerheartHtml, 'channel-1'), status);
+    assert.equal(rawStore.getStatus('匕首之心', daggerheartHtml, 'channel-1'), status);
+    assert.equal(calls[0][1], '.dd help');
+  }
+});
+
+test('Daggerheart 内置模板只注册一次，别名筛选复用内置内容识别和默认选择', async () => {
+  pinia.setActivePinia(pinia.createPinia());
+  const created = [];
+  const { useCharacterCardTemplateStore } = loadTs('../src/stores/characterCardTemplate.ts', {
+    '../../../doc/template/sealchat-default-template-v3-coc7th.html?raw': { default: '<html>coc</html>' },
+    '../../../doc/template/sealchat-shinobigami-template-v1.html?raw': { default: shinobigamiHtml },
+    '../../../doc/template/sealchat-daggerheart-template-v1.html?raw': { default: daggerheartHtml },
+    '@/utils/characterSheetType': metadata,
+    './user': { useUserStore: () => ({ info: { id: 'user-1' } }) },
+    './_config': { api: {
+      async get() { return { data: { items: created } }; },
+      async post(url, payload) {
+        const item = { ...payload, id: String(created.length + 1) };
+        created.push(item);
+        return { data: { item } };
+      },
+    } },
+  });
+  const store = useCharacterCardTemplateStore();
+  await store.ensureTemplatesLoaded();
+  await store.ensureTemplatesLoaded();
+  assert.equal(created.filter(item => item.sheetType === 'daggerheart').length, 1);
+  assert.equal(store.isBuiltinTemplateContent(daggerheartHtml), true);
+  for (const alias of ['daggerheart', 'dh', '匕首之心']) {
+    const templates = store.getTemplatesBySheetType(alias);
+    assert.equal(templates.length, 1);
+    assert.equal(templates[0].name, '匕首之心角色卡');
+    assert.equal(store.getPreferredTemplateBySheetType(alias).content, daggerheartHtml.trim());
+  }
 });
 
 test('unknown → checking → available，同一键与别名共享缓存，支持手动重检', async () => {

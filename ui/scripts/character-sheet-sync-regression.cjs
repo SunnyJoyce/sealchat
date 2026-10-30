@@ -48,6 +48,9 @@ function timers() {
   };
 }
 
+const sheetTypes = load(read('../src/utils/characterSheetType.ts'), {});
+const daggerheartHtml = read('../../doc/template/sealchat-daggerheart-template-v1.html');
+
 function setup(update = async () => true, get = async () => ({ name: 'Hero', attrs: { hope: 0 } })) {
   pinia.setActivePinia(pinia.createPinia());
   const clock = timers();
@@ -59,6 +62,8 @@ function setup(update = async () => true, get = async () => ({ name: 'Hero', att
   const { useCharacterSheetStore } = load(read(storePath), {
     '../../../doc/template/sealchat-default-template-v3-coc7th.html?raw': { default: '' },
     '../../../doc/template/sealchat-shinobigami-template-v1.html?raw': { default: '' },
+    '../../../doc/template/sealchat-daggerheart-template-v1.html?raw': { default: daggerheartHtml },
+    '@/utils/characterSheetType': sheetTypes,
     './characterCard': { useCharacterCardStore: () => card },
     './characterCardTemplate': { useCharacterCardTemplateStore: () => ({}) },
     './chat': { useChatStore: () => ({}) },
@@ -318,4 +323,98 @@ test('host only acknowledges its own iframe after save; failures and stale frame
   dispose();
   assert.equal(clock.pending.size, 0);
   scope.stop();
+});
+
+function setupDaggerheart(update) {
+  const host = setup(update);
+  const clock = timers();
+  const rolls = [];
+  const elements = new Map();
+  const context = vm.createContext({
+    ...clock,
+    document: {
+      addEventListener() {},
+      getElementById(id) {
+        if (!elements.has(id)) elements.set(id, { dataset: {}, classList: { add() {}, remove() {} } });
+        return elements.get(id);
+      },
+    },
+    window: {
+      addEventListener() {},
+      sealchat: {
+        onUpdate() {},
+        updateAttrs(patch) { host.store.updateAttrs('sheet', { ...host.win.attrs, ...patch }); },
+        flushAttrs() { return host.store.flushAttrsSync('sheet'); },
+        roll(...args) { rolls.push(args); },
+      },
+    },
+  });
+  const script = [...daggerheartHtml.matchAll(/<script>([\s\S]*?)<\/script>/g)].at(-1)[1];
+  vm.runInContext(script, context);
+  context.S.model = context.blankModel();
+  return { ...host, context, rolls, elements };
+}
+
+test('Daggerheart aliases select the same default template', () => {
+  const { store } = setup();
+  for (const alias of ['daggerheart', 'dh', '匕首之心']) {
+    assert.equal(store.getDefaultTemplate(alias), daggerheartHtml.trim());
+  }
+});
+
+test('Daggerheart dd/ddr flush pending roots and model before rolling, deduplicating rapid submissions', async () => {
+  for (const reaction of [false, true]) {
+    const saved = deferred();
+    const { context, calls, rolls } = setupDaggerheart(() => saved.promise);
+    context.setRoot('希望', 4);
+    context.setRoot('敏捷', 3);
+    context.S.model.conditions.push('隐藏');
+    context.touchModel();
+    context.openRoll({ trait: '敏捷' });
+    context.S.modal.reaction = reaction;
+    const pending = context.submitModal();
+    await context.submitModal();
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0][2]['希望'], 4);
+    assert.equal(calls[0][2]['敏捷'], 3);
+    assert.equal(calls[0][2]['$匕首之心'].conditions[0], '隐藏');
+    assert.equal(rolls.length, 0);
+    saved.resolve(true);
+    await pending;
+    assert.equal(rolls.length, 1);
+    assert.match(rolls[0][0], reaction ? /^\.ddr / : /^\.dd /);
+    assert.equal(context.S.modal, null);
+  }
+});
+
+test('Daggerheart save failure shows feedback, sends no roll and can retry', async () => {
+  for (const fail of [() => false, () => { throw new Error('offline'); }]) {
+    let retry = false;
+    const { context, rolls, elements } = setupDaggerheart(async () => retry ? true : fail());
+    context.setRoot('希望', 5);
+    context.openRoll({});
+    await context.submitModal();
+    assert.equal(rolls.length, 0);
+    assert.equal(context.S.modal.submitting, false);
+    assert.match(elements.get('modalBox').innerHTML, /保存失败，本次未掷骰/);
+    retry = true;
+    await context.submitModal();
+    assert.equal(rolls.length, 1);
+  }
+});
+
+test('Daggerheart damage rolls bypass flush; cancelled submissions cannot send a delayed roll', async () => {
+  const saved = deferred();
+  const { context, rolls } = setupDaggerheart(() => saved.promise);
+  context.setRoot('希望', 4);
+  context.openRoll({});
+  const pending = context.submitModal();
+  context.closeModal();
+  context.S.modal = { type: 'damage', expr: '2d8+3', reason: '长弓伤害' };
+  await context.submitModal();
+  assert.equal(rolls.length, 1);
+  assert.equal(rolls[0][0], '.r 2d8+3 长弓伤害');
+  saved.resolve(true);
+  await pending;
+  assert.equal(rolls.length, 1);
 });
