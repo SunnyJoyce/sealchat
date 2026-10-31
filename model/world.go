@@ -49,10 +49,12 @@ type WorldModel struct {
 	AllowManageOtherUserChannelIdentities bool       `json:"allowManageOtherUserChannelIdentities" gorm:"default:false"` // 允许管理其他用户频道角色
 	AllowMemberEditKeywords               bool       `json:"allowMemberEditKeywords" gorm:"default:false"`               // 允许成员编辑世界术语
 	AllowMemberAccessLogLayout            bool       `json:"allowMemberAccessLogLayout" gorm:"not null;default:false"`   // 允许普通成员进入 LOG 排版
-	StrictWhisperPrivacy                  bool       `json:"strictWhisperPrivacy" gorm:"default:true"`                   // 悄悄话严格保密：开启后管理员不可旁路查看
-	AudioLibraryMode                      string     `json:"audioLibraryMode" gorm:"size:16;default:database"`           // database/s3，按世界配置
-	AudioLibraryPrefix                    string     `json:"audioLibraryPrefix" gorm:"size:512"`                         // 世界音频 S3 prefix
-	AudioLibrarySelectorDepth             int        `json:"audioLibrarySelectorDepth" gorm:"not null;default:2"`        // S3 音乐控制台选择器递归深度
+	ExportRespectMessageVisibility        bool       `json:"exportRespectMessageVisibility" gorm:"not null;default:true"`
+	AllowMemberExportMessages             bool       `json:"allowMemberExportMessages" gorm:"not null;default:true"`
+	StrictWhisperPrivacy                  bool       `json:"strictWhisperPrivacy" gorm:"default:true"`            // 悄悄话严格保密：开启后管理员不可旁路查看
+	AudioLibraryMode                      string     `json:"audioLibraryMode" gorm:"size:16;default:database"`    // database/s3，按世界配置
+	AudioLibraryPrefix                    string     `json:"audioLibraryPrefix" gorm:"size:512"`                  // 世界音频 S3 prefix
+	AudioLibrarySelectorDepth             int        `json:"audioLibrarySelectorDepth" gorm:"not null;default:2"` // S3 音乐控制台选择器递归深度
 	ChannelDefaultDiceMode                string     `json:"channelDefaultDiceMode" gorm:"size:24;default:builtin"`
 	ChannelDefaultBotID                   string     `json:"channelDefaultBotId" gorm:"size:100"`
 	ChannelDefaultBotIDsJSON              string     `json:"-" gorm:"type:text"`

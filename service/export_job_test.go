@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -15,8 +16,303 @@ import (
 	"testing"
 	"time"
 
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
+
 	"sealchat/model"
 )
+
+func TestChannelExportVisibility(t *testing.T) {
+	for _, tc := range []struct {
+		name, user                string
+		respect, strict, filtered bool
+	}{
+		{"member visibility", "export-member", true, true, true},
+		{"member full", "export-member", false, true, false},
+		{"admin full", "export-admin", true, false, false},
+		{"admin strict", "export-admin", true, true, true},
+		{"admin strict overrides full", "export-admin", false, true, true},
+		{"owner full", "export-owner", true, false, false},
+		{"owner strict", "export-owner", true, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			logExportFixture(t, nil)
+			createExportTestUser(t, "export-admin", "export-admin", "Admin")
+			if err := model.GetDB().Create(&model.WorldMemberModel{WorldID: "export-world", UserID: "export-admin", Role: model.WorldRoleAdmin}).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := model.GetDB().Model(&model.WorldModel{}).Where("id = ?", "export-world").Updates(map[string]any{
+				"export_respect_message_visibility": tc.respect, "strict_whisper_privacy": tc.strict,
+			}).Error; err != nil {
+				t.Fatal(err)
+			}
+			seedExportVisibilityMessages(t, "export-a", tc.user)
+			job, err := CreateMessageExportJob(&ExportJobOptions{UserID: tc.user, ChannelID: "export-a", Format: "txt", IncludeOOC: true, IncludeImages: true, IncludeDiceCommand: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			messages, err := loadMessagesForExport(job)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, m := range messages {
+				got = append(got, m.Content)
+			}
+			want := []string{"public", "sent", "direct", "multi"}
+			if !tc.filtered {
+				want = append(want, "hidden")
+			}
+			if !slices.Equal(got, want) {
+				t.Fatalf("got %v want %v", got, want)
+			}
+			// Filtering must also precede merging.
+			job.MergeMessages = true
+			messages, err = loadMessagesForExport(job)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, m := range messages {
+				if tc.filtered && strings.Contains(m.Content, "hidden") {
+					t.Fatal("hidden whisper reached merge")
+				}
+			}
+		})
+	}
+}
+
+func TestChannelExportRequiresMemberChannelReadAccess(t *testing.T) {
+	logExportFixture(t, nil)
+	db := model.GetDB()
+	if err := db.Create(&model.ChannelModel{
+		StringPKBaseModel: model.StringPKBaseModel{ID: "export-restricted"},
+		WorldID:           "export-world",
+		UserID:            "export-owner",
+		Name:              "restricted",
+		Status:            model.ChannelStatusActive,
+		PermType:          "non-public",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := CreateMessageExportJob(&ExportJobOptions{UserID: "export-member", ChannelID: "export-restricted", Format: "txt"}); !errors.Is(err, ErrExportPermission) {
+		t.Fatalf("member exported unreadable channel: %v", err)
+	}
+	if _, err := CreateBatchMessageExportJob(&ExportJobOptions{UserID: "export-member", ChannelID: "export-a", Format: "txt"}, []string{"export-a", "export-restricted"}); !errors.Is(err, ErrExportPermission) {
+		t.Fatalf("batch export accepted unreadable child: %v", err)
+	}
+
+	job, err := CreateMessageExportJob(&ExportJobOptions{UserID: "export-member", ChannelID: "export-a", Format: "txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.ChannelModel{}).Where("id = ?", "export-a").Update("perm_type", "non-public").Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RetryMessageExportJob(job); !errors.Is(err, ErrExportPermission) {
+		t.Fatalf("retry bypassed current channel read access: %v", err)
+	}
+}
+
+func seedExportVisibilityMessages(t *testing.T, channelID, viewer string) {
+	t.Helper()
+	for i, label := range []string{"public", "sent", "direct", "multi", "hidden"} {
+		logExportMessage(t, channelID+"-"+label, channelID, time.Now(), float64(i+1), func(m *model.MessageModel) {
+			m.Content, m.UserID = label, "export-target"
+			m.SenderIdentityID = "identity-not-a-user"
+			m.IsWhisper = label != "public"
+			m.WhisperTo = "export-owner"
+			if label == "sent" {
+				m.UserID = viewer
+			}
+			if label == "direct" {
+				m.WhisperTo = viewer
+			}
+			if label == "hidden" {
+				m.WhisperTo = "unrelated-user"
+			}
+		})
+	}
+	if err := model.CreateWhisperRecipients(channelID+"-multi", []string{"unrelated-user", viewer}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestChannelExportBatchSnapshotAndRetry(t *testing.T) {
+	logExportFixture(t, nil)
+	db := model.GetDB()
+	for _, row := range []any{
+		&model.WorldModel{StringPKBaseModel: model.StringPKBaseModel{ID: "other-world"}, Name: "Other", InviteSlug: "other", Status: "active"},
+		&model.WorldMemberModel{WorldID: "other-world", UserID: "export-member", Role: model.WorldRoleMember},
+	} {
+		if err := db.Create(row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Model(&model.ChannelModel{}).Where("id = ?", "export-b").Update("world_id", "other-world").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.WorldModel{}).Where("id = ?", "other-world").Update("export_respect_message_visibility", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"export-a", "export-b"} {
+		seedExportVisibilityMessages(t, id, "export-member")
+	}
+	job, err := CreateBatchMessageExportJob(&ExportJobOptions{UserID: "export-member", ChannelID: "export-a", Format: "txt", IncludeOOC: true}, []string{"export-a", "export-b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Reverse the world settings. Retry must preserve both original scopes.
+	for id, value := range map[string]bool{"export-world": false, "other-world": true} {
+		if err := db.Model(&model.WorldModel{}).Where("id = ?", id).Update("export_respect_message_visibility", value).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	retry, err := RetryMessageExportJob(job)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, j := range []*model.MessageExportJobModel{job, retry} {
+		extra := parseExportExtraOptions(j.ExtraOptions)
+		if !extra.VisibilityByChannel["export-a"] || extra.VisibilityByChannel["export-b"] {
+			t.Fatalf("wrong snapshot: %v", extra.VisibilityByChannel)
+		}
+		if err := processExportJob(j, MessageExportWorkerConfig{StorageDir: t.TempDir()}); err != nil {
+			t.Fatal(err)
+		}
+		stored, err := GetMessageExportJob(j.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		archive, err := zip.OpenReader(stored.FilePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, f := range archive.File {
+			r, err := f.Open()
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err := io.ReadAll(r)
+			r.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(data), "hidden") != (i == 1) {
+				t.Fatalf("wrong child visibility %s: %s", f.Name, data)
+			}
+		}
+		archive.Close()
+	}
+	if err := db.Model(&model.WorldModel{}).Where("id = ?", "other-world").Update("allow_member_export_messages", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RetryMessageExportJob(job); !errors.Is(err, ErrMemberExportDisabled) {
+		t.Fatalf("retry bypassed child authorization: %v", err)
+	}
+}
+
+func TestChannelExportSingleRetrySnapshot(t *testing.T) {
+	logExportFixture(t, nil)
+	job, err := CreateMessageExportJob(&ExportJobOptions{UserID: "export-member", ChannelID: "export-a", Format: "txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := model.GetDB().Model(&model.WorldModel{}).Where("id = ?", "export-world").Update("export_respect_message_visibility", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	retry, err := RetryMessageExportJob(job)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !parseExportExtraOptions(retry.ExtraOptions).VisibilityByChannel["export-a"] {
+		t.Fatal("retry broadened original scope")
+	}
+	legacy := *job
+	legacy.ExtraOptions = ""
+	retry, err = RetryMessageExportJob(&legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !parseExportExtraOptions(retry.ExtraOptions).VisibilityByChannel["export-a"] {
+		t.Fatal("legacy retry gained unrestricted access")
+	}
+}
+
+func TestWorldExportSettingsMigrationDefaults(t *testing.T) {
+	// Start from an actual old table, then use the same AutoMigrate as DBInit.
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "legacy.db")), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+	if err := db.Exec("CREATE TABLE worlds (id text PRIMARY KEY, name text NOT NULL)").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO worlds (id, name) VALUES (?, ?)", "legacy", "Legacy").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.WorldModel{}); err != nil {
+		t.Fatal(err)
+	}
+	var legacy model.WorldModel
+	if err := db.First(&legacy, "id = ?", "legacy").Error; err != nil {
+		t.Fatal(err)
+	}
+	if !legacy.AllowMemberExportMessages || !legacy.ExportRespectMessageVisibility {
+		t.Fatalf("old world defaults: %+v", legacy)
+	}
+	fresh := &model.WorldModel{Name: "Fresh", InviteSlug: "fresh"}
+	if err := db.Create(fresh).Error; err != nil {
+		t.Fatal(err)
+	}
+	var loaded model.WorldModel
+	if err := db.First(&loaded, "id = ?", fresh.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.AllowMemberExportMessages || !loaded.ExportRespectMessageVisibility {
+		t.Fatal("new world defaults are not true")
+	}
+	if err := db.Model(&legacy).Updates(map[string]any{"allow_member_export_messages": false, "export_respect_message_visibility": false}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.WorldModel{}); err != nil {
+		t.Fatal(err)
+	}
+	loaded = model.WorldModel{}
+	if err := db.First(&loaded, "id = ?", legacy.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if loaded.AllowMemberExportMessages || loaded.ExportRespectMessageVisibility {
+		t.Fatal("migration reset explicit false")
+	}
+}
+
+func TestWorldExportSettingsUpdate(t *testing.T) {
+	logExportFixture(t, nil)
+	off := false
+	w, err := WorldUpdate("export-world", "export-owner", WorldUpdateParams{ExportRespectMessageVisibility: &off, AllowMemberExportMessages: &off})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.ExportRespectMessageVisibility || w.AllowMemberExportMessages {
+		t.Fatal("false settings not persisted")
+	}
+	w, err = WorldUpdate("export-world", "export-owner", WorldUpdateParams{Name: "Renamed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.ExportRespectMessageVisibility || w.AllowMemberExportMessages {
+		t.Fatal("omitted fields changed")
+	}
+	if _, err := WorldUpdate("export-world", "export-member", WorldUpdateParams{AllowMemberExportMessages: &off}); !errors.Is(err, ErrWorldPermission) {
+		t.Fatalf("member changed settings: %v", err)
+	}
+}
 
 // Keep LOG export regression coverage in this tracked file (new *_test.go files are ignored).
 func logExportFixture(t *testing.T, sections []LogSection) *model.LogProjectModel {

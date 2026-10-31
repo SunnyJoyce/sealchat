@@ -74,6 +74,8 @@ watch(() => [props.worldId, props.visible] as const, async ([id, visible]) => {
       allowManageOtherUserChannelIdentities: detail.world?.allowManageOtherUserChannelIdentities ?? false,
       allowMemberEditKeywords: detail.world?.allowMemberEditKeywords ?? false,
       strictWhisperPrivacy: detail.world?.strictWhisperPrivacy ?? true,
+      exportRespectMessageVisibility: detail.world?.exportRespectMessageVisibility ?? true,
+      allowMemberExportMessages: detail.world?.allowMemberExportMessages ?? true,
       channelDefaultDiceMode: detail.world?.channelDefaultDiceMode || 'builtin',
       channelDefaultBotIds: Array.isArray((detail.world as any)?.channelDefaultBotIds) ? (detail.world as any).channelDefaultBotIds : [],
       channelDefaultBotId: detail.world?.channelDefaultBotId || '',
@@ -232,6 +234,20 @@ const getDescriptionCountLabel = (value?: string) => {
             <div class="sc-manage-row__hint">成员可通过设计链接参与排版并编辑自己的消息；不会授予编辑他人消息、调整来源或发布的权限。</div>
           </div>
           <n-switch v-model:value="form.allowMemberAccessLogLayout" class="sc-manage-row__control" />
+        </div>
+        <div class="sc-manage-row">
+          <div class="sc-manage-row__text">
+            <div class="sc-manage-row__label">导出记录遵循消息可见权限</div>
+            <div class="sc-manage-row__hint">开启后，普通成员只能导出自己有权查看的聊天记录。世界管理员可执行管理级导出，但严格悄悄话隐私仍然生效。</div>
+          </div>
+          <n-switch v-model:value="form.exportRespectMessageVisibility" class="sc-manage-row__control" />
+        </div>
+        <div class="sc-manage-row">
+          <div class="sc-manage-row__text">
+            <div class="sc-manage-row__label">允许世界成员导出记录</div>
+            <div class="sc-manage-row__hint">关闭后，普通世界成员无法导出聊天记录；世界所有者和管理员不受影响。</div>
+          </div>
+          <n-switch v-model:value="form.allowMemberExportMessages" class="sc-manage-row__control" />
         </div>
         <div class="sc-manage-row">
           <div class="sc-manage-row__text">

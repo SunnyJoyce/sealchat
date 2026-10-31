@@ -82,6 +82,8 @@ type WorldUpdateParams struct {
 	AllowManageOtherUserChannelIdentities *bool
 	AllowMemberEditKeywords               *bool
 	AllowMemberAccessLogLayout            *bool `json:"allowMemberAccessLogLayout"`
+	ExportRespectMessageVisibility        *bool `json:"exportRespectMessageVisibility"`
+	AllowMemberExportMessages             *bool `json:"allowMemberExportMessages"`
 	StrictWhisperPrivacy                  *bool
 	ChannelDefaultDiceMode                *string
 	ChannelDefaultBotID                   *string
@@ -754,6 +756,12 @@ func WorldUpdate(worldID, actorID string, params WorldUpdateParams) (*model.Worl
 	}
 	if params.StrictWhisperPrivacy != nil {
 		updates["strict_whisper_privacy"] = *params.StrictWhisperPrivacy
+	}
+	if params.ExportRespectMessageVisibility != nil {
+		updates["export_respect_message_visibility"] = *params.ExportRespectMessageVisibility
+	}
+	if params.AllowMemberExportMessages != nil {
+		updates["allow_member_export_messages"] = *params.AllowMemberExportMessages
 	}
 	if params.ChannelDefaultDiceMode != nil || params.ChannelDefaultBotID != nil || params.ChannelDefaultBotIDs != nil || params.ChannelDefaultEventBotIDs != nil {
 		nextMode := world.ChannelDefaultDiceMode
