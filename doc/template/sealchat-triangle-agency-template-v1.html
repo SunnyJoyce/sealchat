@@ -428,6 +428,8 @@ var QA_MAX = 9;
 var CONNECTION_MAX = 9;
 var RECENT_GUARD_MS = 2500;
 var CONFIRM_MS = 3000;
+var QA_PENDING_MS = 120000;
+var QA_PENDING_LIMIT = 32;
 
 // 九项资质与社区插件 triangle-agency 的规则模板 ta 同名：根级数值即当前资质保证（QA），插件检定时直接读取。
 var QUALITIES = [
@@ -672,6 +674,7 @@ var S = {
   deferredRender: false,
   saveState: 'idle',
   recent: null,
+  qaPending: {},
   ui: { confirm: null, confirmUntil: 0 },
   modal: null,
   // 受限文档：null 或 { stage: 'setup' | 'access' | 'open', rekey, error }
@@ -688,6 +691,13 @@ function qaState(q) {
 }
 
 function setRoots(patch, immediate) {
+  // 绝对值编辑与在途相对指令不能仅凭数值归因，须核对后再继续结算。
+  for (var q in patch) {
+    var p = S.qaPending[q];
+    if (!p) continue;
+    if (p.steps.length || p.blocked) { blockPending(p); p.host = null; }
+    else { clearTimeout(p.timer); delete S.qaPending[q]; }
+  }
   for (var k in patch) { S.attrs[k] = patch[k]; S.pendingRoot[k] = patch[k]; }
   scheduleSave(immediate);
 }
@@ -778,6 +788,8 @@ function onHostUpdate(data) {
   }
   for (var p in S.pendingRoot) attrs[p] = S.pendingRoot[p];
   S.attrs = attrs;
+  // 使用原始宿主快照核销；即使正在编辑、暂缓重绘，也不能漏掉中间回写。
+  for (var q in S.qaPending) reconcilePending(q, incoming[q]);
 
   // 尚未写入的空白卡也继续检查：宿主稍后才送达的已有数据优先于默认值。
   if (!S.modelDirty) {
@@ -1110,8 +1122,8 @@ function openRoll(quality) {
     quality: QUALITY_KEYS.indexOf(quality) >= 0 ? quality : QUALITY_KEYS[0],
     kind: 'ta', die: '', noChaos: false, noFailure: false,
     spend: 0, spent: 0, refill: {}, sent: '', submitting: false, error: '',
-    // 已发送、宿主尚未回显的 .st 调整：{ 资质: { base: 发送时卡上的值, delta: 累计调整 } }
-    pending: {}
+    // 在弹窗关闭、再次检定期间仍保留在途指令，不能重新释放额度。
+    pending: S.qaPending
   };
   renderModal();
 }
@@ -1128,14 +1140,14 @@ function rollCommand() {
 // D20 特殊技能检定需支付 1 点 QA，当前 QA 不足时不能发起。
 function canRoll() {
   var m = S.modal;
-  return m.kind !== 'tra' || settleCurrent(m.quality) >= 1;
+  return !qaBlocked(m.quality) && (m.kind !== 'tra' || settleCurrent(m.quality) >= 1);
 }
 function sendCommand(cmd, label) {
   window.sealchat.roll(cmd, label || cmd, {});
 }
 // 检定与 .st 调整依赖服务端人物卡的当前 QA：先提交模板内的修改并等待宿主保存完成，再发送指令。
 // 保存失败时保留弹窗并提示，本次不发送，可重试。
-function modalSend(cmds, label, done) {
+function modalSend(cmds, label, done, prepare) {
   var m = S.modal;
   if (!m || m.submitting) return;
   if (S.composing) { m.error = '请先完成输入后再发送'; renderModal(); return; }
@@ -1147,28 +1159,82 @@ function modalSend(cmds, label, done) {
   try { wait = window.sealchat.flushAttrs(); } catch (e) { wait = Promise.reject(e); }
   Promise.resolve(wait).then(function() {
     if (S.modal !== m) return;
+    // 保存等待期间额度可能变化；重新校验并在发送前登记，覆盖极快回写。
+    if (prepare && !prepare()) { m.error = 'QA 状态已变化，请核对后重新选择'; return; }
     cmds.forEach(function(cmd) { sendCommand(cmd, label); });
     done();
   }, function() {
     if (S.modal === m) m.error = '人物卡保存失败，本次未发送，请重试';
+  }).catch(function() {
+    // 桥接异常时可能已有部分指令送达，不能重试整批或释放登记的额度。
+    for (var q in m.pending) blockPending(m.pending[q]);
+    if (S.modal === m) m.error = '指令发送状态无法确认，请核对聊天后再操作';
   }).then(function() {
     m.submitting = false;
     if (S.modal === m) renderModal();
   });
 }
-// 未经 SealDice 回写前，人物卡上的当前 QA 还未计入本次已发送的调整。
-// 宿主刷新后卡上数值与发送时不同，说明调整已生效，改以卡上数值为准，避免重复扣减。
+// .st 没有指令级确认标识。只按有序数值前缀核销；多个前缀同值时取最短者，
+// 与基准同值的快照无法区分重复推送与净零合并回写，因此不核销。
+// 不匹配、绝对值编辑或超时均停止乐观结算，核对聊天后才能采用宿主值，不自动重发。
+function blockPending(p) {
+  clearTimeout(p.timer);
+  p.steps = [];
+  p.blocked = true;
+}
+function qaBlocked(q) { return !!(S.qaPending[q] && S.qaPending[q].blocked); }
+function qaSavePending(q) {
+  return q in S.pendingRoot || !!(S.recent && Date.now() < S.recent.until && q in S.recent.patch);
+}
+function reconcilePending(q, value) {
+  var p = S.qaPending[q];
+  if (!p) return;
+  // 未确认的绝对值编辑优先；不能把被 S.recent 拦截的旧值提供给核对按钮。
+  if (qaSavePending(q)) { p.host = null; return; }
+  var valid = (typeof value === 'number' || typeof value === 'string') && /^[+-]?\d+$/.test(String(value).trim()) && Number.isSafeInteger(Number(value));
+  p.host = valid ? Number(value) : null;
+  if (p.blocked) return;
+  if (!valid) { blockPending(p); return; }
+  var host = p.host;
+  if (host === p.base) return;
+  var expected = p.base;
+  for (var i = 0; i < p.steps.length; i++) {
+    expected += p.steps[i];
+    if (host === expected) {
+      p.base = host;
+      p.steps.splice(0, i + 1);
+      return;
+    }
+  }
+  blockPending(p);
+}
 function settleCurrent(q) {
   var host = qaState(q).current;
-  var p = S.modal.pending[q];
-  if (!p) return host;
-  if (host !== p.base) { delete S.modal.pending[q]; return host; }
-  return p.base + p.delta;
+  var p = S.qaPending[q];
+  if (!p || p.blocked) return host;
+  return p.steps.reduce(function(v, delta) { return v + delta; }, p.base);
 }
 function notePending(m, q, delta) {
-  if (S.modal === m) settleCurrent(q);
-  var p = m.pending[q] || (m.pending[q] = { base: qaState(q).current, delta: 0 });
-  p.delta += delta;
+  var p = m.pending[q];
+  if (!p || !p.steps.length) {
+    if (p) clearTimeout(p.timer);
+    p = m.pending[q] = { base: qaState(q).current, host: qaState(q).current, steps: [], blocked: false };
+    p.timer = setTimeout(function() {
+      if (S.qaPending[q] !== p) return;
+      if (p.steps.length) blockPending(p);
+      else delete S.qaPending[q];
+      if (S.modal) renderModal();
+    }, QA_PENDING_MS);
+  }
+  p.steps.push(delta);
+  // FLUSH_ATTRS 已确认本地保存；旧编辑保护不能再遮住随后 SealDice 的 QA 回写。
+  if (S.recent) delete S.recent.patch[q];
+}
+function canAdjust(q, delta) {
+  var p = S.qaPending[q];
+  if (qaBlocked(q) || (p && p.steps.length >= QA_PENDING_LIMIT)) return false;
+  var cur = settleCurrent(q);
+  return delta < 0 ? -delta <= Math.max(0, cur) : delta <= Math.max(0, qaState(q).max - cur);
 }
 
 function renderModal() {
@@ -1205,8 +1271,8 @@ function renderModal() {
       + '<div class="settle-block"><span class="label">花费 ' + esc(q) + ' QA（当前约 ' + cur + ' 点' + (m.spent ? '，本次已花费 ' + m.spent : '') + '）</span>'
       + '<p class="hint">每点 QA 可把一颗骰子改为 3，或把 3 改为其他点数。插件按未花费 QA 报告结果，花费后请据此调整结论与混沌。</p>'
       + '<div class="btn-row">' + stepper('m-spend', '', m.spend)
-      + '<button class="btn dark" data-act="m-spend-send"' + (m.spend > 0 && m.spend <= canSpend ? '' : ' disabled') + '>发送 .st ' + esc(q) + '-' + m.spend + '</button>'
-      + (m.kind === 'tra' ? '<button class="btn" data-act="m-clear"' + (canSpend > 0 ? '' : ' disabled') + ' title="大失败时清空该资质剩余 QA">清空 ' + esc(q) + ' QA</button>' : '')
+      + '<button class="btn dark" data-act="m-spend-send"' + (m.spend > 0 && canAdjust(q, -m.spend) ? '' : ' disabled') + '>发送 .st ' + esc(q) + '-' + m.spend + '</button>'
+      + (m.kind === 'tra' ? '<button class="btn" data-act="m-clear"' + (canSpend > 0 && canAdjust(q, -canSpend) ? '' : ' disabled') + ' title="大失败时清空该资质剩余 QA">清空 ' + esc(q) + ' QA</button>' : '')
       + '</div></div>';
     if (m.kind !== 'tra') {
       html += '<div class="settle-block"><span class="label">三重升华（调整前恰好三个 3）</span>'
@@ -1214,7 +1280,7 @@ function renderModal() {
         + '<details class="fold"' + (refillTotal ? ' open' : '') + '><summary>稍后重议：补回至多 3 点已花费的 QA（已选 ' + refillTotal + '）</summary>'
         + QUALITY_KEYS.map(function(rq) {
           var st = qaState(rq);
-          var room = Math.max(0, st.max - settleCurrent(rq));
+          var room = qaBlocked(rq) ? 0 : Math.max(0, st.max - settleCurrent(rq));
           if (!room && !m.refill[rq]) return '';
           return '<div class="refill-row"><span>' + rq + ' <span class="hint">可补 ' + room + '</span></span>' + stepper('m-refill', 'data-quality="' + rq + '"', m.refill[rq] || 0) + '</div>';
         }).join('')
@@ -1224,7 +1290,12 @@ function renderModal() {
     }
     html += '<div class="modal-actions"><button class="btn" data-act="m-again">再次检定</button><button class="btn primary" data-act="m-close">完成</button></div></div>';
   }
-  if (m.error) html = html.replace('<div class="modal-actions">', '<p class="modal-error">' + esc(m.error) + '</p><div class="modal-actions">');
+  var unresolved = QUALITY_KEYS.filter(qaBlocked).map(function(q) {
+    var p = S.qaPending[q];
+    return '<p class="modal-error">' + esc(q) + ' QA 回写无法确认或已超时，请先核对聊天中全部 .st 的执行结果。</p>'
+      + '<button class="btn" data-act="m-reconcile" data-quality="' + q + '"' + (p.host == null || m.submitting ? ' disabled' : '') + '>已核对，采用宿主 ' + esc(q) + ' QA ' + esc(p.host) + '（不重发）</button>';
+  }).join('');
+  if (unresolved || m.error) html = html.replace('<div class="modal-actions">', unresolved + (m.error ? '<p class="modal-error">' + esc(m.error) + '</p>' : '') + '<div class="modal-actions">');
   box.innerHTML = html;
   overlay.classList.add('open');
   // 等待保存期间禁用会发送指令的按钮，避免重复提交。
@@ -1390,13 +1461,23 @@ function onModalAct(act, d) {
       m.sent = cmd;
       m.stage = 'settle';
       m.spend = kind === 'tra' ? 1 : 0;
+    }, function() {
+      return canRoll();
     });
     return;
   }
   if (act === 'm-again') {
-    var quality = m.quality, pending = m.pending;
-    openRoll(quality);
-    S.modal.pending = pending;
+    openRoll(m.quality);
+    return;
+  }
+  if (act === 'm-reconcile') {
+    var p = S.qaPending[d.quality];
+    if (m.submitting || !p || !p.blocked || p.host == null || qaSavePending(d.quality)) return;
+    S.attrs[d.quality] = p.host;
+    if (S.recent) delete S.recent.patch[d.quality];
+    delete S.qaPending[d.quality];
+    m.spend = 0;
+    m.refill = {};
     renderModal();
     return;
   }
@@ -1406,29 +1487,37 @@ function onModalAct(act, d) {
     return;
   }
   if (act === 'm-spend-send') {
-    var spend = m.spend;
-    if (spend <= 0) return;
-    modalSend(['.st ' + m.quality + '-' + spend], '花费 QA', function() {
-      notePending(m, m.quality, -spend);
+    var spend = m.spend, quality = m.quality;
+    if (spend <= 0 || !canAdjust(quality, -spend)) return;
+    modalSend(['.st ' + quality + '-' + spend], '花费 QA', function() {
       m.spent += spend;
       m.spend = 0;
       toast('已发送花费 ' + spend + ' 点' + m.quality + ' QA，等待 SealDice 回写');
+    }, function() {
+      if (!canAdjust(quality, -spend)) return false;
+      notePending(m, quality, -spend);
+      return true;
     });
     return;
   }
   if (act === 'm-clear') {
     var left = Math.max(0, settleCurrent(m.quality));
-    if (!left) return;
-    modalSend(['.st ' + m.quality + '-' + left], '清空 QA', function() {
-      notePending(m, m.quality, -left);
+    var quality = m.quality;
+    if (!left || !canAdjust(quality, -left)) return;
+    modalSend(['.st ' + quality + '-' + left], '清空 QA', function() {
       m.spent += left;
       m.spend = 0;
       toast('已发送清空' + m.quality + ' QA');
+    }, function() {
+      if (!canAdjust(quality, -left)) return false;
+      notePending(m, quality, -left);
+      return true;
     });
     return;
   }
   if (act === 'm-refill') {
     var rq = d.quality;
+    if (qaBlocked(rq)) return;
     var st = qaState(rq);
     var room = Math.max(0, st.max - settleCurrent(rq));
     var total = 0;
@@ -1441,15 +1530,23 @@ function onModalAct(act, d) {
   }
   if (act === 'm-refill-send') {
     // 逐项发送相对调整，避免与尚未回写的花费互相覆盖。
-    var refill = m.refill;
+    var refill = clone(m.refill);
     var cmds = [];
     for (var fq in refill) cmds.push('.st ' + fq + '+' + refill[fq]);
     if (!cmds.length) return;
     modalSend(cmds, '稍后重议', function() {
-      for (var rq in refill) notePending(m, rq, refill[rq]);
       if (refill[m.quality]) m.spent = Math.max(0, m.spent - refill[m.quality]);
       m.refill = {};
       toast('已发送补回 QA');
+    }, function() {
+      var total = 0;
+      for (var rq in refill) {
+        if (!canAdjust(rq, refill[rq])) return false;
+        total += refill[rq];
+      }
+      if (total > 3) return false;
+      for (var rq in refill) notePending(m, rq, refill[rq]);
+      return true;
     });
     return;
   }
