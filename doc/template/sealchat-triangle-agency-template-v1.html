@@ -1109,7 +1109,9 @@ function openRoll(quality) {
     stage: 'roll',
     quality: QUALITY_KEYS.indexOf(quality) >= 0 ? quality : QUALITY_KEYS[0],
     kind: 'ta', die: '', noChaos: false, noFailure: false,
-    spend: 0, spent: 0, refill: {}, sent: '', submitting: false, error: ''
+    spend: 0, spent: 0, refill: {}, sent: '', submitting: false, error: '',
+    // 已发送、宿主尚未回显的 .st 调整：{ 资质: { base: 发送时卡上的值, delta: 累计调整 } }
+    pending: {}
   };
   renderModal();
 }
@@ -1122,6 +1124,11 @@ function rollCommand() {
   if (m.noChaos) parts.push('--c');
   if (m.kind === 'tr' && m.noFailure) parts.push('--f');
   return parts.join(' ');
+}
+// D20 特殊技能检定需支付 1 点 QA，当前 QA 不足时不能发起。
+function canRoll() {
+  var m = S.modal;
+  return m.kind !== 'tra' || settleCurrent(m.quality) >= 1;
 }
 function sendCommand(cmd, label) {
   window.sealchat.roll(cmd, label || cmd, {});
@@ -1149,8 +1156,20 @@ function modalSend(cmds, label, done) {
     if (S.modal === m) renderModal();
   });
 }
-// 未经 SealDice 回写前，人物卡上的当前 QA 还未扣除本次已发送的花费。
-function settleCurrent(q) { return qaState(q).current - (q === S.modal.quality ? S.modal.spent : 0); }
+// 未经 SealDice 回写前，人物卡上的当前 QA 还未计入本次已发送的调整。
+// 宿主刷新后卡上数值与发送时不同，说明调整已生效，改以卡上数值为准，避免重复扣减。
+function settleCurrent(q) {
+  var host = qaState(q).current;
+  var p = S.modal.pending[q];
+  if (!p) return host;
+  if (host !== p.base) { delete S.modal.pending[q]; return host; }
+  return p.base + p.delta;
+}
+function notePending(m, q, delta) {
+  if (S.modal === m) settleCurrent(q);
+  var p = m.pending[q] || (m.pending[q] = { base: qaState(q).current, delta: 0 });
+  p.delta += delta;
+}
 
 function renderModal() {
   var overlay = document.getElementById('modal');
@@ -1162,8 +1181,7 @@ function renderModal() {
     var dice = ROLL_DICE[m.kind];
     html = '<div class="modal-head"><span class="kicker">请求机构</span><strong>' + esc(m.quality) + ' · ' + esc(ROLL_KINDS.filter(function(k) { return k[0] === m.kind; })[0][1]) + '</strong></div><div class="modal-body">'
       + '<span class="label">资质</span><div class="seg">' + QUALITY_KEYS.map(function(q) {
-        var st = qaState(q);
-        return '<button class="' + (m.quality === q ? 'on' : '') + '" data-act="m-set" data-key="quality" data-value="' + q + '">' + q + ' ' + st.current + '</button>';
+        return '<button class="' + (m.quality === q ? 'on' : '') + '" data-act="m-set" data-key="quality" data-value="' + q + '">' + q + ' ' + settleCurrent(q) + '</button>';
       }).join('') + '</div>'
       + '<span class="label" style="margin-top:8px">检定类型</span><div class="seg">' + ROLL_KINDS.map(function(k) {
         return '<button class="' + (m.kind === k[0] ? 'on' : '') + '" data-act="m-set" data-key="kind" data-value="' + k[0] + '">' + k[1] + '</button>';
@@ -1173,9 +1191,9 @@ function renderModal() {
       }).join('') + '</div></details>' : '')
       + '<label class="check"><input type="checkbox" data-mcheck="noChaos"' + (m.noChaos ? ' checked' : '') + '>本次不计入群混沌</label>'
       + (m.kind === 'tr' ? '<label class="check"><input type="checkbox" data-mcheck="noFailure"' + (m.noFailure ? ' checked' : '') + '>失败时不记录现实改写失败</label>' : '')
-      + (m.kind === 'tra' ? '<p class="hint" style="margin-top:6px">D20 特殊技能检定需支付 1 点 QA，发送后在结算中扣除。</p>' : '')
+      + (m.kind === 'tra' ? '<p class="hint" style="margin-top:6px">' + (canRoll() ? 'D20 特殊技能检定需支付 1 点 QA，发送后在结算中扣除。' : '当前 ' + esc(m.quality) + ' QA 不足 1 点，无法支付 D20 特殊技能检定的费用。') + '</p>' : '')
       + '<div class="preview">将发送 <code>' + esc(rollCommand()) + '</code></div>'
-      + '<div class="modal-actions"><button class="btn" data-act="m-close">取消</button><button class="btn primary" data-act="m-roll">发送检定</button></div>'
+      + '<div class="modal-actions"><button class="btn" data-act="m-close">取消</button><button class="btn primary" data-act="m-roll"' + (canRoll() ? '' : ' disabled') + '>发送检定</button></div>'
       + '</div>';
   } else {
     var q = m.quality;
@@ -1196,7 +1214,7 @@ function renderModal() {
         + '<details class="fold"' + (refillTotal ? ' open' : '') + '><summary>稍后重议：补回至多 3 点已花费的 QA（已选 ' + refillTotal + '）</summary>'
         + QUALITY_KEYS.map(function(rq) {
           var st = qaState(rq);
-          var room = Math.max(0, st.max - (rq === q ? cur : st.current));
+          var room = Math.max(0, st.max - settleCurrent(rq));
           if (!room && !m.refill[rq]) return '';
           return '<div class="refill-row"><span>' + rq + ' <span class="hint">可补 ' + room + '</span></span>' + stepper('m-refill', 'data-quality="' + rq + '"', m.refill[rq] || 0) + '</div>';
         }).join('')
@@ -1210,7 +1228,7 @@ function renderModal() {
   box.innerHTML = html;
   overlay.classList.add('open');
   // 等待保存期间禁用会发送指令的按钮，避免重复提交。
-  if (m.submitting) [].forEach.call(box.querySelectorAll('[data-act="m-roll"],[data-act="m-spend-send"],[data-act="m-clear"],[data-act="m-refill-send"],[data-act="m-star"]'), function(b) { b.disabled = true; });
+  if (m.submitting) [].forEach.call(box.querySelectorAll('[data-act="m-roll"],[data-act="m-set"],[data-mcheck],[data-act="m-spend-send"],[data-act="m-clear"],[data-act="m-refill-send"],[data-act="m-star"]'), function(b) { b.disabled = true; });
 }
 function closeModal() {
   S.modal = null;
@@ -1356,21 +1374,32 @@ function onModalAct(act, d) {
   var m = S.modal;
   if (act === 'm-close') { closeModal(); return; }
   if (act === 'm-set') {
+    if (m.submitting) return;
     m[d.key] = d.value;
     if (d.key === 'kind') m.die = '';
     renderModal();
     return;
   }
   if (act === 'm-roll') {
-    var cmd = rollCommand();
-    modalSend([cmd], m.quality + '检定', function() {
+    if (!canRoll()) return;
+    // 记下发送时的配置，等待保存期间的切换不影响随后的结算。
+    var cmd = rollCommand(), quality = m.quality, kind = m.kind;
+    modalSend([cmd], quality + '检定', function() {
+      m.quality = quality;
+      m.kind = kind;
       m.sent = cmd;
       m.stage = 'settle';
-      m.spend = m.kind === 'tra' ? 1 : 0;
+      m.spend = kind === 'tra' ? 1 : 0;
     });
     return;
   }
-  if (act === 'm-again') { var quality = m.quality; openRoll(quality); return; }
+  if (act === 'm-again') {
+    var quality = m.quality, pending = m.pending;
+    openRoll(quality);
+    S.modal.pending = pending;
+    renderModal();
+    return;
+  }
   if (act === 'm-spend') {
     m.spend = clamp(m.spend + Number(d.delta), 0, Math.max(0, settleCurrent(m.quality)));
     renderModal();
@@ -1380,6 +1409,7 @@ function onModalAct(act, d) {
     var spend = m.spend;
     if (spend <= 0) return;
     modalSend(['.st ' + m.quality + '-' + spend], '花费 QA', function() {
+      notePending(m, m.quality, -spend);
       m.spent += spend;
       m.spend = 0;
       toast('已发送花费 ' + spend + ' 点' + m.quality + ' QA，等待 SealDice 回写');
@@ -1390,6 +1420,7 @@ function onModalAct(act, d) {
     var left = Math.max(0, settleCurrent(m.quality));
     if (!left) return;
     modalSend(['.st ' + m.quality + '-' + left], '清空 QA', function() {
+      notePending(m, m.quality, -left);
       m.spent += left;
       m.spend = 0;
       toast('已发送清空' + m.quality + ' QA');
@@ -1399,7 +1430,7 @@ function onModalAct(act, d) {
   if (act === 'm-refill') {
     var rq = d.quality;
     var st = qaState(rq);
-    var room = Math.max(0, st.max - (rq === m.quality ? settleCurrent(rq) : st.current));
+    var room = Math.max(0, st.max - settleCurrent(rq));
     var total = 0;
     for (var k in m.refill) total += m.refill[k];
     var next = (m.refill[rq] || 0) + Number(d.delta);
@@ -1415,7 +1446,8 @@ function onModalAct(act, d) {
     for (var fq in refill) cmds.push('.st ' + fq + '+' + refill[fq]);
     if (!cmds.length) return;
     modalSend(cmds, '稍后重议', function() {
-      if (refill[m.quality]) m.spent -= refill[m.quality];
+      for (var rq in refill) notePending(m, rq, refill[rq]);
+      if (refill[m.quality]) m.spent = Math.max(0, m.spent - refill[m.quality]);
       m.refill = {};
       toast('已发送补回 QA');
     });
