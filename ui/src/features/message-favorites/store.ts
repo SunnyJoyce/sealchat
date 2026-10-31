@@ -2,7 +2,9 @@ import { onScopeDispose, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useUserStore } from '@/stores/user'
 import {
+  MESSAGE_FAVORITE_BATCH_MAX,
   batchCreateMessageFavorites,
+  batchDeleteMessageFavorites,
   createMessageFavoriteTag,
   deleteMessageFavorite,
   deleteMessageFavoriteTag,
@@ -44,6 +46,15 @@ interface MessageFavoriteTagState {
 const PAGE_SIZE = 30
 const PAGE_SIZE_MAX = 100
 const REFRESH_DELAY = 250
+
+export interface MessageFavoriteBatchRemoveResult {
+  deleted: string[]
+  // 服务端确认已不存在的 ID（例如已被其他客户端取消），同样视为已移除。
+  missing: string[]
+  // 因请求失败或用户上下文变化而未处理的 ID；非空时 error 说明原因。
+  failed: string[]
+  error: unknown
+}
 
 // personal 是跨世界的单一 bucket；world 以 worldId 为边界。
 export const messageFavoriteBucketKey = (scope: MessageFavoriteScope, worldId: string) => (
@@ -104,11 +115,11 @@ export const useMessageFavoriteStore = defineStore('messageFavorites', () => {
     bucket[messageId] = favoriteId
   }
 
-  const forgetFavorite = (key: string, favoriteId: string) => {
+  const forgetFavorites = (key: string, favoriteIds: Set<string>) => {
     const bucket = knownFavorites.value[key]
     if (!bucket) return
     for (const [messageId, id] of Object.entries(bucket)) {
-      if (id === favoriteId) delete bucket[messageId]
+      if (favoriteIds.has(id)) delete bucket[messageId]
     }
   }
 
@@ -246,19 +257,57 @@ export const useMessageFavoriteStore = defineStore('messageFavorites', () => {
     return result
   }
 
-  const removeFromLists = (favoriteId: string) => {
-    for (const state of Object.values(lists.value)) {
-      const index = state.items.findIndex((item) => item.id === favoriteId)
-      if (index >= 0) state.items.splice(index, 1)
+  // onlyKey 为空时清理所有 bucket；收藏 ID 全局唯一。
+  const removeFromLists = (favoriteIds: Set<string>, onlyKey = '') => {
+    if (!favoriteIds.size) return
+    for (const [key, state] of Object.entries(lists.value)) {
+      if (onlyKey && key !== onlyKey) continue
+      if (state.items.some((item) => favoriteIds.has(item.id))) {
+        state.items = state.items.filter((item) => !favoriteIds.has(item.id))
+      }
     }
     // 右键收藏可能在对应列表尚未加载时就写入 knownFavorites，删除时也要独立清理缓存。
-    for (const key of Object.keys(knownFavorites.value)) forgetFavorite(key, favoriteId)
+    for (const key of Object.keys(knownFavorites.value)) {
+      if (!onlyKey || key === onlyKey) forgetFavorites(key, favoriteIds)
+    }
   }
 
   async function removeFavorite(favoriteId: string) {
     const revision = userRevision
     await deleteMessageFavorite(favoriteId)
-    if (revision === userRevision) removeFromLists(favoriteId)
+    if (revision === userRevision) removeFromLists(new Set([favoriteId]))
+  }
+
+  // 批量取消同一收藏空间内的收藏。超过单次上限时按顺序分块，每块一次请求；
+  // 某块失败或用户上下文变化即停止，已成功的块照常同步到缓存。
+  async function removeFavorites(scope: MessageFavoriteScope, worldId: string, favoriteIds: string[]): Promise<MessageFavoriteBatchRemoveResult> {
+    const ids = Array.from(new Set(favoriteIds.map((id) => String(id || '').trim()).filter(Boolean)))
+    const revision = userRevision
+    const key = messageFavoriteBucketKey(scope, worldId)
+    const result: MessageFavoriteBatchRemoveResult = { deleted: [], missing: [], failed: [], error: null }
+    for (let start = 0; start < ids.length; start += MESSAGE_FAVORITE_BATCH_MAX) {
+      if (revision !== userRevision) {
+        result.failed.push(...ids.slice(start))
+        break
+      }
+      try {
+        const response = await batchDeleteMessageFavorites(scope, worldId, ids.slice(start, start + MESSAGE_FAVORITE_BATCH_MAX))
+        result.deleted.push(...response.deleted)
+        result.missing.push(...response.missing)
+        if (revision !== userRevision) continue
+        removeFromLists(new Set(response.deleted))
+        // missing 表示服务端确认 ID 已不存在；请求来自当前 bucket，只清理对应缓存即可。
+        removeFromLists(new Set(response.missing), key)
+      } catch (error) {
+        result.error = error
+        result.failed.push(...ids.slice(start))
+        break
+      }
+    }
+    // 删除期间仍在途的列表请求可能带回已删除项，结束后按当前查询重读一次。
+    const state = lists.value[key]
+    if (revision === userRevision && (state?.loading || state?.loadingMore)) scheduleRefresh(key)
+    return result
   }
 
   // 只提交一个邻居：world 中可能有当前管理员不可见的项夹在可见邻居之间，
@@ -358,6 +407,7 @@ export const useMessageFavoriteStore = defineStore('messageFavorites', () => {
     handleWorldChanged,
     addMessages,
     removeFavorite,
+    removeFavorites,
     moveFavorite,
     setFavoriteTags,
     createTag,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { NButton, NEmpty, NIcon, NInput, NSelect, NSpin, NTag, useMessage, useThemeVars } from 'naive-ui'
-import { Bookmark, GripVertical, Minus, Search, X } from '@vicons/tabler'
+import { NButton, NCheckbox, NEmpty, NIcon, NInput, NSelect, NSpin, NTag, useDialog, useMessage, useThemeVars } from 'naive-ui'
+import { Bookmark, GripVertical, ListCheck, Minus, Search, X } from '@vicons/tabler'
 import { chatEvent, useChatStore } from '@/stores/chat'
 import { useUserStore } from '@/stores/user'
 import { findChannelByIdFromTree } from '@/stores/chatChannelSelection'
@@ -10,6 +10,7 @@ import { describeMessageFavoriteError, type MessageFavoriteItem, type MessageFav
 import { messageFavoriteBucketKey, useMessageFavoriteStore } from './store'
 import { useFavoriteWindowLayout, type FavoriteResizeDirection } from './useFavoriteWindowLayout'
 import { useFavoritePointerSort } from './useFavoritePointerSort'
+import { useFavoriteSelection } from './useFavoriteSelection'
 import MessageFavoriteCard from './MessageFavoriteCard.vue'
 import MessageFavoriteTagManager from './MessageFavoriteTagManager.vue'
 
@@ -25,6 +26,7 @@ const chat = useChatStore()
 const user = useUserStore()
 const store = useMessageFavoriteStore()
 const notice = useMessage()
+const dialog = useDialog()
 const themeVars = useThemeVars()
 
 const FILTER_STORAGE_PREFIX = 'sealchat:message-favorites:filters:v1'
@@ -112,7 +114,9 @@ const expanded = computed(() => props.available && win.layout.mode === 'expanded
 const canMaintain = computed(() => scope.value === 'personal' || store.canManageWorld(currentWorldId.value) === true)
 const readOnly = computed(() => scope.value === 'world' && store.canManageWorld(currentWorldId.value) === false)
 const filtersActive = computed(() => !!active.value.q || active.value.tagIds.length > 0 || (scope.value === 'personal' && !!filters.personal.worldId))
-const sortable = computed(() => canMaintain.value && !filtersActive.value && !list.value?.nextCursor && !list.value?.loading && !list.value?.moving && items.value.length > 1)
+const selection = useFavoriteSelection(() => items.value)
+const batchDeleting = ref(false)
+const sortable = computed(() => canMaintain.value && !selection.active.value && !filtersActive.value && !list.value?.nextCursor && !list.value?.loading && !list.value?.moving && items.value.length > 1)
 const sortHint = computed(() => {
   if (filtersActive.value) return '清除筛选后可调整排序'
   if (list.value?.nextCursor) return '加载全部收藏后可调整排序'
@@ -254,6 +258,67 @@ const remove = async (item: MessageFavoriteItem) => {
   }
 }
 
+const toggleSelectionMode = () => {
+  if (selection.active.value) {
+    selection.exit()
+    return
+  }
+  if (!canMaintain.value) return
+  sort.cancel()
+  selection.enter()
+}
+
+const setAllSelected = (checked: boolean) => {
+  if (checked) selection.selectAll()
+  else selection.clear()
+}
+
+const toggleSelected = (id: string) => {
+  if (!batchDeleting.value) selection.toggle(id)
+}
+
+const runBatchRemove = async (target: { scope: MessageFavoriteScope, worldId: string }, ids: string[]) => {
+  batchDeleting.value = true
+  try {
+    const result = await store.removeFavorites(target.scope, target.worldId, ids)
+    selection.deselect([...result.deleted, ...result.missing])
+    const removed = result.deleted.length + result.missing.length
+    if (result.error) {
+      const reason = describeMessageFavoriteError(result.error, '请稍后重试')
+      if (removed) notice.warning(`已取消收藏 ${removed} 条，另有 ${result.failed.length} 条未完成：${reason}`)
+      else notice.error(`批量取消收藏失败：${reason}`)
+    } else if (removed) {
+      notice.success(result.missing.length
+        ? `已取消收藏 ${removed} 条（其中 ${result.missing.length} 条此前已被移除）`
+        : `已取消收藏 ${removed} 条`)
+    }
+  } finally {
+    batchDeleting.value = false
+  }
+  // 当前页被清空或变短时，按滚动位置补载后续收藏。
+  await nextTick()
+  handleListScroll()
+}
+
+const confirmBatchRemove = () => {
+  const count = selection.count.value
+  if (!count || batchDeleting.value || !canMaintain.value) return
+  const target = { scope: scope.value, worldId: bucketWorldId.value, key: bucketKey.value }
+  const worldScope = target.scope === 'world'
+  dialog.warning({
+    title: '批量取消收藏',
+    content: `将取消选中的 ${count} 条${worldScope ? '世界' : '个人'}收藏${worldScope ? '，世界成员会同步看到变化' : ''}。取消收藏不会删除原消息。`,
+    positiveText: '取消收藏',
+    negativeText: '保留',
+    onPositiveClick: () => {
+      // 以确认时仍可见且仍被选中的项目为准；作用域或世界已切换则放弃。
+      if (bucketKey.value !== target.key || !selection.active.value) return
+      const ids = selection.selectedIds.value.slice()
+      if (ids.length) void runBatchRemove(target, ids)
+    },
+  })
+}
+
 const handleListScroll = () => {
   const element = listRef.value
   if (!element || !list.value?.nextCursor) return
@@ -284,6 +349,7 @@ const open = () => {
 
 const close = () => {
   sort.cancel()
+  selection.exit()
   win.setMode('hidden')
 }
 
@@ -293,6 +359,7 @@ watch([expanded, querySignature], ([isExpanded]) => {
 }, { immediate: true })
 
 watch(userId, () => {
+  selection.exit()
   loadFilterMemory()
   scope.value = currentWorldId.value ? 'world' : 'personal'
 }, { immediate: true })
@@ -319,6 +386,12 @@ watch([tags, () => store.tagsLoaded(scope.value, bucketWorldId.value)], ([next, 
 watch(() => props.available, (available) => {
   if (!available) sort.cancel()
 })
+
+// 批量选择不跨越收藏空间、筛选条件或维护权限；窗口关闭时一并结束。
+watch(bucketKey, () => selection.exit())
+watch(querySignature, () => selection.clear())
+watch(canMaintain, (allowed) => { if (!allowed) selection.exit() })
+watch(visible, (shown) => { if (!shown) selection.exit() })
 
 onMounted(() => chatEvent.on(WORLD_CHANGED_EVENT as any, handleWorldChanged as any))
 onBeforeUnmount(() => {
@@ -423,6 +496,19 @@ defineExpose({ open })
             @update:value="(value: string | null) => { filters.personal.worldId = value || '' }"
           />
           <MessageFavoriteTagManager v-if="canMaintain" :scope="scope" :world-id="bucketWorldId" :tags="tags" />
+          <NButton
+            v-if="canMaintain"
+            size="small"
+            quaternary
+            :type="selection.active.value ? 'primary' : 'default'"
+            :disabled="!selection.active.value && !items.length"
+            :aria-pressed="selection.active.value"
+            :aria-label="selection.active.value ? '退出批量管理' : '批量管理收藏'"
+            :title="selection.active.value ? '退出批量管理' : '批量管理收藏'"
+            @click="toggleSelectionMode"
+          >
+            <template #icon><NIcon><ListCheck /></NIcon></template>
+          </NButton>
         </div>
 
         <div v-if="tags.length" class="mf-window__tags" role="group" aria-label="按标签筛选（同时满足所选标签）">
@@ -472,10 +558,13 @@ defineExpose({ open })
               :sorting="sort.sortingId.value === item.id"
               :drop-before="!!sort.sortingId.value && sort.dropIndex.value === index"
               :jumping="jumpingId === item.id"
+              :selecting="selection.active.value"
+              :selected="selection.isSelected(item.id)"
               @jump="jump(item)"
               @remove="remove(item)"
               @move="handleMove(item, index, $event)"
               @filter-tag="toggleTagFilter"
+              @toggle-select="toggleSelected(item.id)"
             >
               <template v-if="canMaintain" #handle>
                 <button
@@ -504,6 +593,43 @@ defineExpose({ open })
               加载更多
             </button>
           </template>
+        </div>
+
+        <div v-if="selection.active.value" class="mf-window__batch" role="toolbar" aria-label="批量管理收藏">
+          <div class="mf-window__batch-group">
+            <NCheckbox
+              :checked="selection.allSelected.value"
+              :indeterminate="selection.count.value > 0 && !selection.allSelected.value"
+              :disabled="!items.length || batchDeleting"
+              :title="list?.nextCursor ? '只选择已加载的收藏' : '选择当前列表中的全部收藏'"
+              @update:checked="setAllSelected"
+            >
+              {{ list?.nextCursor ? '全选已加载' : '全选' }}
+            </NCheckbox>
+            <span class="mf-window__batch-count" aria-live="polite">已选 {{ selection.count.value }} 项</span>
+          </div>
+          <div class="mf-window__batch-group">
+            <NButton
+              size="small"
+              quaternary
+              :disabled="!selection.unavailableCount.value || batchDeleting"
+              title="选中当前已加载的、原消息已删除或无权查看的收藏"
+              @click="selection.selectUnavailable"
+            >
+              选不可用 ({{ selection.unavailableCount.value }})
+            </NButton>
+            <NButton
+              size="small"
+              type="error"
+              secondary
+              :disabled="!selection.count.value || !!list?.loading"
+              :loading="batchDeleting"
+              @click="confirmBatchRemove"
+            >
+              取消收藏
+            </NButton>
+            <NButton size="small" quaternary :disabled="batchDeleting" @click="selection.exit">完成</NButton>
+          </div>
         </div>
 
         <div
@@ -743,6 +869,33 @@ defineExpose({ open })
 .mf-window__more {
   align-self: center;
   padding: 4px 0;
+}
+
+.mf-window__batch {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--sc-border-mute);
+  background: var(--sc-bg-layer);
+}
+
+.mf-window__batch-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.mf-window__batch-count {
+  color: var(--sc-text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .mf-handle {

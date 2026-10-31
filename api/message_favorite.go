@@ -34,6 +34,7 @@ func BindMessageFavoriteRoutes(group fiber.Router) {
 	favorites := group.Group("/message-favorites", auth)
 	favorites.Get("", messageFavoriteListHandler)
 	favorites.Post("/batch", messageFavoriteBatchHandler)
+	favorites.Post("/batch-delete", messageFavoriteBatchDeleteHandler)
 	favorites.Delete("/:id", messageFavoriteDeleteHandler)
 	favorites.Post("/:id/move", messageFavoriteMoveHandler)
 	favorites.Put("/:id/tags", messageFavoriteTagsHandler)
@@ -90,6 +91,18 @@ func messageFavoriteBatchHandler(c *fiber.Ctx) error {
 		return messageFavoriteError(c, service.ErrMessageFavoriteInvalid)
 	}
 	result, err := service.MessageFavoriteBatchCreate(getCurUser(c).ID, input)
+	if err != nil {
+		return messageFavoriteError(c, err)
+	}
+	return c.JSON(result)
+}
+
+func messageFavoriteBatchDeleteHandler(c *fiber.Ctx) error {
+	var input service.MessageFavoriteBatchDeleteInput
+	if err := c.BodyParser(&input); err != nil {
+		return messageFavoriteError(c, service.ErrMessageFavoriteInvalid)
+	}
+	result, err := service.MessageFavoriteBatchDelete(getCurUser(c).ID, input)
 	if err != nil {
 		return messageFavoriteError(c, err)
 	}

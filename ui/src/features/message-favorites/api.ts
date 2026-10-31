@@ -137,6 +137,27 @@ export const deleteMessageFavorite = async (id: string) => {
   await api.delete(`api/v1/message-favorites/${encodeURIComponent(id)}`)
 }
 
+// 与后端 MessageFavoriteBatchMax 一致：单次批量请求的最大 ID 数。
+export const MESSAGE_FAVORITE_BATCH_MAX = 100
+
+export interface MessageFavoriteBatchDeleteResult {
+  deleted: string[]
+  // 服务端确认已不存在的 ID（通常已被其他客户端取消）；其他收藏空间中的现存 ID 会被拒绝。
+  missing: string[]
+}
+
+const normalizeIds = (raw: unknown) => (Array.isArray(raw) ? raw.map((id) => String(id || '')).filter(Boolean) : [])
+
+// 只删除 scope/worldId 所指收藏空间内的收藏；权限按该空间判断。
+export const batchDeleteMessageFavorites = async (
+  scope: MessageFavoriteScope,
+  worldId: string,
+  ids: string[],
+): Promise<MessageFavoriteBatchDeleteResult> => {
+  const resp = await api.post('api/v1/message-favorites/batch-delete', { ...scopeParams(scope, worldId), ids })
+  return { deleted: normalizeIds(resp.data?.deleted), missing: normalizeIds(resp.data?.missing) }
+}
+
 // afterId 是目标前驱，beforeId 是目标后继；至少提供一个。
 export const moveMessageFavorite = async (id: string, neighbor: { afterId?: string, beforeId?: string }) => {
   await api.post(`api/v1/message-favorites/${encodeURIComponent(id)}/move`, neighbor)

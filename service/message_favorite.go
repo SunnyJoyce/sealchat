@@ -279,6 +279,76 @@ func MessageFavoriteBatchCreate(actor string, input MessageFavoriteBatchInput) (
 	return result, nil
 }
 
+type MessageFavoriteBatchDeleteInput struct {
+	MessageFavoriteScope
+	IDs []string `json:"ids"`
+}
+
+// Missing lists IDs that no longer exist. Existing favorites outside the
+// authorized bucket are rejected instead of being hidden as missing.
+type MessageFavoriteBatchDeleteResult struct {
+	Deleted []string `json:"deleted"`
+	Missing []string `json:"missing"`
+}
+
+// MessageFavoriteBatchDelete removes favorites from one bucket in a single
+// transaction. The bucket is authorized once with the same write policy as
+// single-item mutations, and every predicate stays inside that bucket.
+func MessageFavoriteBatchDelete(actor string, input MessageFavoriteBatchDeleteInput) (*MessageFavoriteBatchDeleteResult, error) {
+	ids, err := favoriteIDs(input.IDs, MessageFavoriteBatchMax)
+	if err != nil || len(ids) == 0 {
+		return nil, ErrMessageFavoriteInvalid
+	}
+	var b messageFavoriteBucket
+	result := &MessageFavoriteBatchDeleteResult{Deleted: []string{}, Missing: []string{}}
+	err = model.GetDB().Transaction(func(tx *gorm.DB) error {
+		var err error
+		b, _, err = favoriteBucket(tx, actor, input.MessageFavoriteScope, true)
+		if err != nil {
+			return err
+		}
+		if err := lockFavoriteBucket(tx, b); err != nil {
+			return err
+		}
+		var rows []model.MessageFavoriteModel
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id, scope, owner_user_id, world_id").Where("id IN ?", ids).Find(&rows).Error; err != nil {
+			return err
+		}
+		found := make(map[string]bool, len(rows))
+		for _, row := range rows {
+			belongs := row.Scope == b.scope && row.OwnerUserID == b.ownerID
+			if b.scope == model.MessageFavoriteScopeWorld {
+				belongs = belongs && row.WorldID == b.worldID
+			}
+			if !belongs {
+				return ErrMessageFavoriteDenied
+			}
+			found[row.ID] = true
+		}
+		for _, id := range ids {
+			if found[id] {
+				result.Deleted = append(result.Deleted, id)
+			} else {
+				result.Missing = append(result.Missing, id)
+			}
+		}
+		if len(result.Deleted) == 0 {
+			return nil
+		}
+		if err := tx.Where("favorite_id IN ?", result.Deleted).Delete(&model.MessageFavoriteTagLinkModel{}).Error; err != nil {
+			return err
+		}
+		return b.query(tx).Where("id IN ?", result.Deleted).Delete(&model.MessageFavoriteModel{}).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(result.Deleted) > 0 {
+		notifyFavoriteWorld(b)
+	}
+	return result, nil
+}
+
 func MessageFavoriteDelete(actor, id string) error {
 	var b messageFavoriteBucket
 	err := model.GetDB().Transaction(func(tx *gorm.DB) error {
