@@ -2,7 +2,7 @@
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { NDrawer, NDrawerContent, NButton, NIcon, NEmpty, NCard, NInput, NForm, NFormItem, NModal, NPopconfirm, NTag, NSwitch, NSelect, NCheckbox, NRadioGroup, NRadioButton, NCollapseTransition, NColorPicker, useMessage } from 'naive-ui';
 import { Plus, Trash, Edit, Link, Eye, Upload, Download, X, Refresh, ChevronDown, ChevronRight, Settings, GripVertical } from '@vicons/tabler';
-import { characterApiUnsupportedText, useCharacterCardStore, type CharacterCard, type OnlineCharacterCardItem } from '@/stores/characterCard';
+import { CHARACTER_CARD_NAME_MAX_LENGTH, validateCharacterCardName, characterApiUnsupportedText, useCharacterCardStore, type CharacterCard, type OnlineCharacterCardItem } from '@/stores/characterCard';
 import { useCharacterSheetStore } from '@/stores/characterSheet';
 import { useCharacterCardTemplateStore, type CharacterCardTemplate } from '@/stores/characterCardTemplate';
 import { useCharacterCardAvatarStore } from '@/stores/characterCardAvatar';
@@ -1856,8 +1856,9 @@ watch(newCardSheetType, () => {
 
 const handleCreateCard = async () => {
   if (!ensureCharacterApiEnabled()) return;
-  if (!newCardName.value.trim()) {
-    message.warning('请输入角色名称');
+  const nameError = validateCharacterCardName(newCardName.value);
+  if (nameError) {
+    message.warning(nameError);
     return;
   }
   const selectedTemplate = newCardTemplateId.value && newCardTemplateId.value !== DETACHED_TEMPLATE_VALUE
@@ -1943,6 +1944,45 @@ const handleCreateCard = async () => {
     message.error(e?.response?.data?.error || e?.message || '创建失败');
   } finally {
     creating.value = false;
+  }
+};
+
+const renameTarget = ref<{ channelId: string; cardId: string } | null>(null);
+const renameCardName = ref('');
+const renaming = ref(false);
+const renameModalVisible = ref(false);
+
+const canRenameCard = (card: CharacterCard) => cardStore.canRenameActiveCard(resolvedChannelId.value, card.id);
+
+const openRenameModal = (card: CharacterCard) => {
+  if (!canRenameCard(card)) return;
+  renameTarget.value = { channelId: resolvedChannelId.value, cardId: card.id };
+  renameCardName.value = card.name;
+  renameModalVisible.value = true;
+};
+
+const handleRenameCard = async () => {
+  if (renaming.value) return false;
+  const target = renameTarget.value;
+  if (!target || target.channelId !== resolvedChannelId.value) {
+    message.warning('当前频道已变化，请重新选择人物卡');
+    return false;
+  }
+  const nameError = validateCharacterCardName(renameCardName.value);
+  if (nameError) {
+    message.warning(nameError);
+    return false;
+  }
+  renaming.value = true;
+  try {
+    await cardStore.renameActiveCard(target.channelId, target.cardId, renameCardName.value);
+    renameModalVisible.value = false;
+    message.success('重命名成功');
+  } catch (e: any) {
+    message.error(e?.response?.data?.error || e?.response?.err || e?.message || '重命名失败');
+    return false;
+  } finally {
+    renaming.value = false;
   }
 };
 
@@ -2322,6 +2362,7 @@ defineExpose({ openCardById });
     :show="visible"
     placement="right"
     :width="drawerWidth"
+    :trap-focus="!renameModalVisible"
     @update:show="handleClose"
   >
     <n-drawer-content closable>
@@ -2931,6 +2972,16 @@ defineExpose({ openCardById });
                 <template #icon><n-icon :component="Link" /></template>
                 绑定
               </n-button>
+              <n-button
+                v-if="canRenameCard(card)"
+                secondary
+                size="tiny"
+                title="重命名"
+                @click="openRenameModal(card)"
+              >
+                <template #icon><n-icon :component="Edit" /></template>
+                重命名
+              </n-button>
               <n-popconfirm @positive-click="handleDeleteCard(card)">
                 <template #trigger>
                   <n-button
@@ -2972,6 +3023,19 @@ defineExpose({ openCardById });
     @change="handleAvatarFileChange"
   />
 
+  <n-modal
+    v-model:show="renameModalVisible"
+    preset="dialog"
+    :show-icon="false"
+    title="重命名人物卡"
+    positive-text="重命名"
+    :positive-button-props="{ loading: renaming, disabled: renaming }"
+    negative-text="取消"
+    @positive-click="handleRenameCard"
+  >
+    <n-input v-model:value="renameCardName" :maxlength="CHARACTER_CARD_NAME_MAX_LENGTH" placeholder="请输入角色名称" :disabled="renaming" />
+  </n-modal>
+
   <!-- Create Modal -->
   <n-modal
     v-model:show="createModalVisible"
@@ -2985,7 +3049,7 @@ defineExpose({ openCardById });
   >
     <n-form label-width="80">
       <n-form-item label="角色名称">
-        <n-input v-model:value="newCardName" maxlength="32" placeholder="请输入角色名称" />
+        <n-input v-model:value="newCardName" :maxlength="CHARACTER_CARD_NAME_MAX_LENGTH" placeholder="请输入角色名称" />
       </n-form-item>
       <n-form-item label="卡片类型">
         <n-select v-model:value="newCardSheetTypePreset" :options="newCardSheetTypeOptions" :disabled="characterApiDisabled" />

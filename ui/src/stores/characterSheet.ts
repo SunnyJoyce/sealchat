@@ -1297,6 +1297,18 @@ export const useCharacterSheetStore = defineStore('characterSheet', () => {
     }
   };
 
+  const updateCardName = (cardId: string, cardName: string) => {
+    if (!cardId) return;
+    let changed = false;
+    activeWindowIds.value.forEach((windowId) => {
+      const win = windows.value[windowId];
+      if (!win || win.readOnly || win.cardId !== cardId || win.cardName === cardName) return;
+      win.cardName = cardName;
+      changed = true;
+    });
+    if (changed) schedulePersistWindows();
+  };
+
   const updateCardAvatar = (cardId: string, avatarUrl?: string) => {
     if (!cardId) return;
     let changed = false;
@@ -1397,6 +1409,7 @@ export const useCharacterSheetStore = defineStore('characterSheet', () => {
     syncWindowTemplateFromCloud,
     normalizeTemplate,
     setMode,
+    updateCardName,
     updateCardAvatar,
     toggleMode,
     getTemplate,
